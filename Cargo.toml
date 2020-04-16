@@ -3,8 +3,8 @@ name = "sledis"
 version = "0.1.0"
 authors = ["theseriousadult <jack@gallabytes.com>"]
 edition = "2018"
+description = "a datastructure store on top of sled"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 sled = "0.31.0"
