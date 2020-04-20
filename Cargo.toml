@@ -9,4 +9,5 @@ description = "a datastructure store on top of sled"
 [dependencies]
 sled = "0.31.0"
 bytes = "0.5.4"
+thiserror = "1.0.15"
 
