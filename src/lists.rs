@@ -189,6 +189,23 @@ impl<'a> Conn<'a> {
         }
         Ok(None)
     }
+
+    pub fn lset<V>(&self, name: &[u8], ix: u64, v: V) -> Res<Option<IVec>>
+    where
+        IVec: From<V>,
+    {
+        if let Some(meta) = self.list_get_meta(name)? {
+            if let Some(key) = meta.mk_key(ix) {
+                return Ok(Some(
+                    self.0
+                        .insert::<Vec<_>, V>(Key::List(name, key).encode(), v)?
+                        .ok_or_else(|| MissingVal(name.to_vec(), key))
+                        .map_err(abort_err)?,
+                ));
+            }
+        }
+        Ok(None)
+    }
 }
 
 #[derive(Error, Debug)]
