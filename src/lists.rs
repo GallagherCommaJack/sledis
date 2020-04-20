@@ -100,7 +100,7 @@ impl<'a> Conn<'a> {
     }
 
     pub fn list_get_meta(&self, name: &[u8]) -> Res<Option<Meta>> {
-        let key = KeyRef::ListMeta(name).encode();
+        let key = Key::ListMeta(name).encode();
         self.0
             .get(&key)?
             .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.to_vec())))
@@ -109,7 +109,7 @@ impl<'a> Conn<'a> {
     }
 
     pub fn list_put_meta(&self, name: &[u8], meta: &Meta) -> Res<()> {
-        let key = KeyRef::ListMeta(name).encode();
+        let key = Key::ListMeta(name).encode();
         self.0.insert(key, &meta.encode())?;
         Ok(())
     }
@@ -122,7 +122,7 @@ impl<'a> Conn<'a> {
         let ix = meta.push_front();
         self.list_put_meta(name, &meta)?;
 
-        let key = KeyRef::List(name, ix).encode();
+        let key = Key::List(name, ix).encode();
         self.0.insert::<Vec<u8>, V>(key, val)?;
 
         Ok(())
@@ -136,7 +136,7 @@ impl<'a> Conn<'a> {
         let ix = meta.push_back();
         self.list_put_meta(name, &meta)?;
 
-        let key = KeyRef::List(name, ix).encode();
+        let key = Key::List(name, ix).encode();
         self.0.insert::<Vec<u8>, V>(key, val)?;
 
         Ok(())
@@ -149,7 +149,7 @@ impl<'a> Conn<'a> {
 
                 let val = self
                     .0
-                    .remove(KeyRef::List(name, ix).encode())?
+                    .remove(Key::List(name, ix).encode())?
                     .ok_or_else(|| MissingVal(name.to_vec(), ix))
                     .map_err(abort_err)?;
 
@@ -166,7 +166,7 @@ impl<'a> Conn<'a> {
 
                 let val = self
                     .0
-                    .remove(KeyRef::List(name, ix).encode())?
+                    .remove(Key::List(name, ix).encode())?
                     .ok_or_else(|| MissingVal(name.to_vec(), ix))
                     .map_err(abort_err)?;
 
@@ -181,7 +181,7 @@ impl<'a> Conn<'a> {
             if let Some(key) = meta.mk_key(ix) {
                 return Ok(Some(
                     self.0
-                        .get(KeyRef::List(name, key).encode())?
+                        .get(Key::List(name, key).encode())?
                         .ok_or_else(|| MissingVal(name.to_vec(), key))
                         .map_err(abort_err)?,
                 ));
