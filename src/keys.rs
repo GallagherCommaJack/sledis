@@ -52,7 +52,7 @@ impl<'a> Key<'a> {
             Key::ListMeta(k) => {
                 out = Vec::with_capacity(1 + k.len() + 2);
                 out.push(LIST_META_TAG);
-                out.extend_from_slice(escape(k.as_ref()).as_ref());
+                out.extend_from_slice(escape(k).as_ref());
             }
             Key::SubMap(k1, k2) => {
                 out = Vec::with_capacity(1 + k1.len() + 2 + k2.len() + 2);

@@ -89,121 +89,237 @@ impl Meta {
     }
 }
 
-impl<'a> Conn<'a> {
-    pub fn list_create(&self, name: &[u8]) -> Res<Option<Meta>> {
-        let res = self.list_get_meta(name)?;
-        if res.is_none() {
-            self.list_put_meta(name, &Meta::default())?;
+pub trait ListStore: Store {
+    fn list_create<K>(&self, name: K) -> Result<Meta, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>;
+
+    fn lpush_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    where
+        IVec: From<K> + From<V>,
+        K: AsRef<[u8]>;
+
+    fn lpush_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    where
+        IVec: From<K> + From<V>,
+        K: AsRef<[u8]>;
+
+    fn lpop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>;
+
+    fn lpop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>;
+
+    fn lget<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>;
+
+    fn lset<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K> + From<V>,
+        K: AsRef<[u8]>;
+}
+
+/// Fetches previous metadata at `name` if it exists, returning an error if data exists but fails to parse.
+/// Applies `f`, and overwrites the metadata with the resulting list if it doesn't return an error.
+/// Returns the written `meta`.
+fn update_list_meta<S, F>(store: &S, name: &[u8], mut f: F) -> Result<Option<Meta>, S::Error>
+where
+    S: Store,
+    S::Error: From<Error>,
+    F: FnMut(Option<Meta>) -> Result<Option<Meta>, S::Error>,
+{
+    let key = Key::ListMeta(name).encode();
+    let mut err: Option<S::Error> = None;
+    let mut meta: Option<Meta> = None;
+
+    store.fetch_update::<&[u8], IVec, _>(key.as_ref(), |iv| {
+        let got = if let Some(bs) = iv {
+            if let Some(got) = Meta::decode(bs) {
+                Some(got)
+            } else {
+                err = Some(InvalidMeta(name.to_vec()).into());
+                return Some(bs.into());
+            }
+        } else {
+            None
+        };
+        match f(got) {
+            Ok(m) => {
+                err = None;
+                meta = m;
+                m.map(Meta::encode).as_ref().map(IVec::from)
+            }
+            Err(e) => {
+                err = Some(e);
+                iv.map(IVec::from)
+            }
         }
+    })?;
 
-        Ok(res)
+    if let Some(e) = err {
+        Err(e)
+    } else {
+        Ok(meta)
     }
+}
 
-    pub fn list_get_meta(&self, name: &[u8]) -> Res<Option<Meta>> {
-        let key = Key::ListMeta(name).encode();
-        self.0
-            .get(&key)?
-            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.to_vec())))
+impl<S> ListStore for S
+where
+    S: Store,
+    S::Error: From<Error>,
+{
+    fn list_create<K>(&self, name: K) -> Result<Meta, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>,
+    {
+        update_list_meta(self, name.as_ref(), |om| Ok(Some(om.unwrap_or_default())))
             .transpose()
-            .map_err(abort_err)
+            .unwrap()
     }
 
-    pub fn list_put_meta(&self, name: &[u8], meta: &Meta) -> Res<()> {
-        let key = Key::ListMeta(name).encode();
-        self.0.insert(key, &meta.encode())?;
-        Ok(())
-    }
-
-    pub fn lpush_front<V>(&self, name: &[u8], val: V) -> Res<()>
+    fn lpush_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
-        IVec: From<V>,
+        IVec: From<K> + From<V>,
+        K: AsRef<[u8]>,
     {
-        let mut meta = self.list_get_meta(name)?.unwrap_or_default();
-        let ix = meta.push_front();
-        self.list_put_meta(name, &meta)?;
+        // dummy value - will overwrite before use
+        let mut ix = 0;
 
-        let key = Key::List(name, ix).encode();
-        self.0.insert::<Vec<u8>, V>(key, val)?;
+        update_list_meta(self, name.as_ref(), |om| {
+            let mut meta = om.unwrap_or_default();
+            ix = meta.push_front();
+            Ok(Some(meta))
+        })?
+        .unwrap();
 
-        Ok(())
-    }
-
-    pub fn lpush_back<V>(&self, name: &[u8], val: V) -> Res<()>
-    where
-        IVec: From<V>,
-    {
-        let mut meta = self.list_get_meta(name)?.unwrap_or_default();
-        let ix = meta.push_back();
-        self.list_put_meta(name, &meta)?;
-
-        let key = Key::List(name, ix).encode();
-        self.0.insert::<Vec<u8>, V>(key, val)?;
+        self.insert(Key::List(name.as_ref(), ix).encode(), val)?;
 
         Ok(())
     }
 
-    pub fn lpop_front(&self, name: &[u8]) -> Res<Option<IVec>> {
-        if let Some(mut meta) = self.list_get_meta(name)? {
-            if let Some(ix) = meta.pop_front() {
-                self.list_put_meta(name, &meta)?;
-
-                let val = self
-                    .0
-                    .remove(Key::List(name, ix).encode())?
-                    .ok_or_else(|| MissingVal(name.to_vec(), ix))
-                    .map_err(abort_err)?;
-
-                return Ok(Some(val));
-            }
-        }
-        Ok(None)
-    }
-
-    pub fn lpop_back(&self, name: &[u8]) -> Res<Option<IVec>> {
-        if let Some(mut meta) = self.list_get_meta(name)? {
-            if let Some(ix) = meta.pop_back() {
-                self.list_put_meta(name, &meta)?;
-
-                let val = self
-                    .0
-                    .remove(Key::List(name, ix).encode())?
-                    .ok_or_else(|| MissingVal(name.to_vec(), ix))
-                    .map_err(abort_err)?;
-
-                return Ok(Some(val));
-            }
-        }
-        Ok(None)
-    }
-
-    pub fn lget(&self, name: &[u8], ix: u64) -> Res<Option<IVec>> {
-        if let Some(meta) = self.list_get_meta(name)? {
-            if let Some(key) = meta.mk_key(ix) {
-                return Ok(Some(
-                    self.0
-                        .get(Key::List(name, key).encode())?
-                        .ok_or_else(|| MissingVal(name.to_vec(), key))
-                        .map_err(abort_err)?,
-                ));
-            }
-        }
-        Ok(None)
-    }
-
-    pub fn lset<V>(&self, name: &[u8], ix: u64, v: V) -> Res<Option<IVec>>
+    fn lpush_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
-        IVec: From<V>,
+        IVec: From<K> + From<V>,
+        K: AsRef<[u8]>,
     {
-        if let Some(meta) = self.list_get_meta(name)? {
-            if let Some(key) = meta.mk_key(ix) {
-                return Ok(Some(
-                    self.0
-                        .insert::<Vec<_>, V>(Key::List(name, key).encode(), v)?
-                        .ok_or_else(|| MissingVal(name.to_vec(), key))
-                        .map_err(abort_err)?,
-                ));
+        // dummy value - will overwrite before use
+        let mut ix = 0;
+
+        update_list_meta(self, name.as_ref(), |om| {
+            let mut meta = om.unwrap_or_default();
+            ix = meta.push_back();
+            Ok(Some(meta))
+        })?
+        .unwrap();
+
+        self.insert(Key::List(name.as_ref(), ix).encode(), val)?;
+
+        Ok(())
+    }
+
+    fn lpop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>,
+    {
+        let mut ix: Option<ListIndex> = None;
+
+        update_list_meta(self, name.as_ref(), |om| {
+            let mut meta = om.unwrap_or_default();
+            ix = meta.pop_front();
+            Ok(Some(meta))
+        })?
+        .unwrap();
+
+        Ok(if let Some(ix) = ix {
+            let key = Key::List(name.as_ref(), ix);
+            let res = self.remove::<&[u8]>(key.encode().as_slice())?;
+
+            if res.is_none() {
+                return Err(MissingVal(name.as_ref().to_vec(), ix).into());
+            }
+
+            res
+        } else {
+            None
+        })
+    }
+
+    fn lpop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>,
+    {
+        let mut ix: Option<ListIndex> = None;
+
+        update_list_meta(self, name.as_ref(), |om| {
+            let mut meta = om.unwrap_or_default();
+            ix = meta.pop_back();
+            Ok(Some(meta))
+        })?
+        .unwrap();
+
+        Ok(if let Some(ix) = ix {
+            let key = Key::List(name.as_ref(), ix);
+            let res = self.remove::<&[u8]>(key.encode().as_slice())?;
+
+            if res.is_none() {
+                return Err(MissingVal(name.as_ref().to_vec(), ix).into());
+            }
+
+            res
+        } else {
+            None
+        })
+    }
+
+    fn lget<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K>,
+        K: AsRef<[u8]>,
+    {
+        let key = Key::ListMeta(name.as_ref()).encode();
+
+        if let Some(meta) = self
+            .get::<&[u8]>(&key)?
+            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.as_ref().to_vec())))
+            .transpose()?
+        {
+            if let Some(ix) = meta.mk_key(ix) {
+                let key = Key::List(name.as_ref(), ix).encode();
+                return self.get::<&[u8]>(&key);
             }
         }
+
+        Ok(None)
+    }
+
+    fn lset<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<K> + From<V>,
+        K: AsRef<[u8]>,
+    {
+        let key = Key::ListMeta(name.as_ref()).encode();
+
+        if let Some(meta) = self
+            .get::<&[u8]>(&key)?
+            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.as_ref().to_vec())))
+            .transpose()?
+        {
+            if let Some(ix) = meta.mk_key(ix) {
+                let key = Key::List(name.as_ref(), ix).encode();
+                return self.insert::<&[u8], _>(&key, val);
+            }
+        }
+
         Ok(None)
     }
 }
@@ -216,10 +332,4 @@ pub enum Error {
     MissingVal(Vec<u8>, ListIndex),
 }
 
-type Res<T> = sled::ConflictableTransactionResult<T, Error>;
-
-fn abort_err<E>(e: E) -> sled::ConflictableTransactionError<E> {
-    sled::ConflictableTransactionError::Abort(e)
-}
-
-use Error::*;
+use self::Error::*;

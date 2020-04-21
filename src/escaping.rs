@@ -30,6 +30,11 @@ impl Deref for EscapedVec {
 }
 
 impl EscapedVec {
+    /// Creates an `EscapedVec` without checking or copying.
+    ///
+    /// # Safety
+    ///
+    /// `bs` must not contain any unescaped `[NULL]` bytes.
     pub unsafe fn from_bytes_unchecked(bs: Bytes) -> Self {
         Self(bs)
     }
