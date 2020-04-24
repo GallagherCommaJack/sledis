@@ -94,43 +94,27 @@ impl Meta {
 }
 
 pub trait ListStore: Store {
-    fn list_create<K>(&self, name: K) -> Result<Meta, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>;
+    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
     fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
 
-    fn list_push_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>;
+        IVec: From<V>;
 
-    fn list_push_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_back<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>;
+        IVec: From<V>;
 
-    fn list_pop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>;
+    fn list_pop_front(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
+    fn list_pop_back(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
-    fn list_pop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>;
+    fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
 
-    fn list_get<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
+    fn list_set<V>(&self, name: &[u8], ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K>,
-        K: AsRef<[u8]>;
-
-    fn list_set<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>;
+        IVec: From<V>;
 }
 
 /// Fetches previous metadata at `name` if it exists, returning an error if data exists but fails to parse.
@@ -146,7 +130,7 @@ where
     let mut err: Option<S::Error> = None;
     let mut meta: Option<Meta> = None;
 
-    store.fetch_update::<&[u8], IVec, _>(key.as_ref(), |iv| {
+    store.fetch_update::<IVec, _>(&key, |iv| {
         let got = if let Some(bs) = iv {
             if let Some(got) = Meta::decode(bs) {
                 Some(got)
@@ -182,12 +166,8 @@ where
     S: Store,
     S::Error: From<Error>,
 {
-    fn list_create<K>(&self, name: K) -> Result<Meta, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
-        update_list_meta(self, name.as_ref(), |om| Ok(Some(om.unwrap_or_default())))
+    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error> {
+        update_list_meta(self, name, |om| Ok(Some(om.unwrap_or_default())))
             .transpose()
             .unwrap()
     }
@@ -195,7 +175,7 @@ where
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
         let key = Key::ListMeta(name).encode();
 
-        if let Some(bs) = self.get(key)? {
+        if let Some(bs) = self.get(&key)? {
             if let Some(got) = Meta::decode(&bs) {
                 Ok(Some(got))
             } else {
@@ -210,54 +190,48 @@ where
         Ok(self.list_get_meta(name)?.as_ref().map(Meta::len))
     }
 
-    fn list_push_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
     {
         // dummy value - will overwrite before use
         let mut ix = 0;
 
-        update_list_meta(self, name.as_ref(), |om| {
+        update_list_meta(self, name, |om| {
             let mut meta = om.unwrap_or_default();
             ix = meta.push_front();
             Ok(Some(meta))
         })?
         .unwrap();
 
-        self.insert(Key::List(name.as_ref(), ix).encode(), val)?;
+        self.insert(&Key::List(name, ix).encode(), val)?;
 
         Ok(())
     }
 
-    fn list_push_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_back<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
     {
         // dummy value - will overwrite before use
         let mut ix = 0;
 
-        update_list_meta(self, name.as_ref(), |om| {
+        update_list_meta(self, name, |om| {
             let mut meta = om.unwrap_or_default();
             ix = meta.push_back();
             Ok(Some(meta))
         })?
         .unwrap();
 
-        self.insert(Key::List(name.as_ref(), ix).encode(), val)?;
+        self.insert(&Key::List(name, ix).encode(), val)?;
 
         Ok(())
     }
 
-    fn list_pop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
+    fn list_pop_front(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error> {
         let mut ix: Option<ListIndex> = None;
 
-        update_list_meta(self, name.as_ref(), |om| {
+        update_list_meta(self, name, |om| {
             let mut meta = om.unwrap_or_default();
             ix = meta.pop_front();
             Ok(Some(meta))
@@ -265,11 +239,11 @@ where
         .unwrap();
 
         Ok(if let Some(ix) = ix {
-            let key = Key::List(name.as_ref(), ix);
-            let res = self.remove::<&[u8]>(key.encode().as_slice())?;
+            let key = Key::List(name, ix);
+            let res = self.remove(&key.encode())?;
 
             if res.is_none() {
-                return Err(MissingVal(name.as_ref().to_vec(), ix).into());
+                return Err(MissingVal(name.to_vec(), ix).into());
             }
 
             res
@@ -278,14 +252,10 @@ where
         })
     }
 
-    fn list_pop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
+    fn list_pop_back(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error> {
         let mut ix: Option<ListIndex> = None;
 
-        update_list_meta(self, name.as_ref(), |om| {
+        update_list_meta(self, name, |om| {
             let mut meta = om.unwrap_or_default();
             ix = meta.pop_back();
             Ok(Some(meta))
@@ -293,11 +263,11 @@ where
         .unwrap();
 
         Ok(if let Some(ix) = ix {
-            let key = Key::List(name.as_ref(), ix);
-            let res = self.remove::<&[u8]>(key.encode().as_slice())?;
+            let key = Key::List(name, ix);
+            let res = self.remove(&key.encode())?;
 
             if res.is_none() {
-                return Err(MissingVal(name.as_ref().to_vec(), ix).into());
+                return Err(MissingVal(name.to_vec(), ix).into());
             }
 
             res
@@ -306,42 +276,37 @@ where
         })
     }
 
-    fn list_get<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
-        let key = Key::ListMeta(name.as_ref()).encode();
+    fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error> {
+        let key = Key::ListMeta(name).encode();
 
         if let Some(meta) = self
-            .get::<&[u8]>(&key)?
-            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.as_ref().to_vec())))
+            .get(&key)?
+            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.to_vec())))
             .transpose()?
         {
             if let Some(ix) = meta.mk_key(ix) {
-                let key = Key::List(name.as_ref(), ix).encode();
-                return self.get::<&[u8]>(&key);
+                let key = Key::List(name, ix).encode();
+                return self.get(&key);
             }
         }
 
         Ok(None)
     }
 
-    fn list_set<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
+    fn list_set<V>(&self, name: &[u8], ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
     {
-        let key = Key::ListMeta(name.as_ref()).encode();
+        let key = Key::ListMeta(name).encode();
 
         if let Some(meta) = self
-            .get::<&[u8]>(&key)?
-            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.as_ref().to_vec())))
+            .get(&key)?
+            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.to_vec())))
             .transpose()?
         {
             if let Some(ix) = meta.mk_key(ix) {
-                let key = Key::List(name.as_ref(), ix).encode();
-                return self.insert::<&[u8], _>(&key, val);
+                let key = Key::List(name, ix).encode();
+                return self.insert(&key, val);
             }
         }
 
