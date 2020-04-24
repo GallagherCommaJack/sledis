@@ -99,35 +99,35 @@ pub trait ListStore: Store {
         IVec: From<K>,
         K: AsRef<[u8]>;
 
-    fn lget_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
-    fn llen(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
+    fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
+    fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
 
-    fn lpush_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
         IVec: From<K> + From<V>,
         K: AsRef<[u8]>;
 
-    fn lpush_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
         IVec: From<K> + From<V>,
         K: AsRef<[u8]>;
 
-    fn lpop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    fn list_pop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K>,
         K: AsRef<[u8]>;
 
-    fn lpop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    fn list_pop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K>,
         K: AsRef<[u8]>;
 
-    fn lget<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
+    fn list_get<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K>,
         K: AsRef<[u8]>;
 
-    fn lset<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
+    fn list_set<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K> + From<V>,
         K: AsRef<[u8]>;
@@ -192,7 +192,7 @@ where
             .unwrap()
     }
 
-    fn lget_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
+    fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
         let key = Key::ListMeta(name).encode();
 
         if let Some(bs) = self.get(key)? {
@@ -206,11 +206,11 @@ where
         }
     }
 
-    fn llen(&self, name: &[u8]) -> Result<Option<u64>, Self::Error> {
-        Ok(self.lget_meta(name)?.as_ref().map(Meta::len))
+    fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error> {
+        Ok(self.list_get_meta(name)?.as_ref().map(Meta::len))
     }
 
-    fn lpush_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
         IVec: From<K> + From<V>,
         K: AsRef<[u8]>,
@@ -230,7 +230,7 @@ where
         Ok(())
     }
 
-    fn lpush_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
+    fn list_push_back<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
         IVec: From<K> + From<V>,
         K: AsRef<[u8]>,
@@ -250,7 +250,7 @@ where
         Ok(())
     }
 
-    fn lpop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    fn list_pop_front<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K>,
         K: AsRef<[u8]>,
@@ -278,7 +278,7 @@ where
         })
     }
 
-    fn lpop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
+    fn list_pop_back<K>(&self, name: K) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K>,
         K: AsRef<[u8]>,
@@ -306,7 +306,7 @@ where
         })
     }
 
-    fn lget<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
+    fn list_get<K>(&self, name: K, ix: u64) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K>,
         K: AsRef<[u8]>,
@@ -327,7 +327,7 @@ where
         Ok(None)
     }
 
-    fn lset<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
+    fn list_set<K, V>(&self, name: K, ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<K> + From<V>,
         K: AsRef<[u8]>,
