@@ -2,16 +2,11 @@ use super::*;
 use sled::IVec;
 use thiserror::*;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+// list metadata type
+#[derive(Default, Copy, Clone, Eq, PartialEq, Debug)]
 pub struct Meta {
     pub head: ListIndex,
     pub len: u64,
-}
-
-impl Default for Meta {
-    fn default() -> Self {
-        Meta { head: 0, len: 0 }
-    }
 }
 
 pub const META_SIZE: usize = INDEX_BYTES + 8;
