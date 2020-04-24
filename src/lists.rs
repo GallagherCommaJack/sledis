@@ -92,6 +92,7 @@ pub trait ListStore: Store {
     fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
+
     fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
 
     fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
@@ -103,6 +104,7 @@ pub trait ListStore: Store {
         IVec: From<V>;
 
     fn list_pop_front(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
+
     fn list_pop_back(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
     fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
