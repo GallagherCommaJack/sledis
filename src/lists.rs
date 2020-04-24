@@ -2,16 +2,11 @@ use super::*;
 use sled::IVec;
 use thiserror::*;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+// list metadata type
+#[derive(Default, Copy, Clone, Eq, PartialEq, Debug)]
 pub struct Meta {
     pub head: ListIndex,
     pub len: u64,
-}
-
-impl Default for Meta {
-    fn default() -> Self {
-        Meta { head: 0, len: 0 }
-    }
 }
 
 pub const META_SIZE: usize = INDEX_BYTES + 8;
@@ -97,6 +92,7 @@ pub trait ListStore: Store {
     fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
+
     fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
 
     fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
@@ -108,6 +104,7 @@ pub trait ListStore: Store {
         IVec: From<V>;
 
     fn list_pop_front(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
+
     fn list_pop_back(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
     fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
