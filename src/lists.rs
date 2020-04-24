@@ -63,6 +63,10 @@ impl Meta {
         }
     }
 
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+
     pub fn push_front(&mut self) -> ListIndex {
         self.head -= 1;
         self.len += 1;
@@ -94,6 +98,9 @@ pub trait ListStore: Store {
     where
         IVec: From<K>,
         K: AsRef<[u8]>;
+
+    fn lget_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
+    fn llen(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
 
     fn lpush_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
     where
@@ -183,6 +190,24 @@ where
         update_list_meta(self, name.as_ref(), |om| Ok(Some(om.unwrap_or_default())))
             .transpose()
             .unwrap()
+    }
+
+    fn lget_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
+        let key = Key::ListMeta(name).encode();
+
+        if let Some(bs) = self.get(key)? {
+            if let Some(got) = Meta::decode(&bs) {
+                Ok(Some(got))
+            } else {
+                Err(InvalidMeta(name.to_vec()).into())
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn llen(&self, name: &[u8]) -> Result<Option<u64>, Self::Error> {
+        Ok(self.lget_meta(name)?.as_ref().map(Meta::len))
     }
 
     fn lpush_front<K, V>(&self, name: K, val: V) -> Result<(), Self::Error>
