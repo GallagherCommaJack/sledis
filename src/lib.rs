@@ -15,28 +15,20 @@ pub use error::*;
 pub trait Store {
     type Error;
 
-    fn get<K>(&self, key: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>;
+    fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
-    fn insert<K, V>(&self, key: K, val: V) -> Result<Option<IVec>, Self::Error>
+    fn insert<V>(&self, key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>;
+        IVec: From<V>;
 
-    fn remove<K>(&self, key: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>;
+    fn remove(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
-    fn fetch_update<K, V, F>(&self, key: K, mut f: F) -> Result<Option<IVec>, Self::Error>
+    fn fetch_update<V, F>(&self, key: &[u8], mut f: F) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
         F: FnMut(Option<&[u8]>) -> Option<V>,
     {
-        let got = self.get(key.as_ref())?;
+        let got = self.get(key)?;
         let res = f(got.as_ref().map(IVec::as_ref));
         match res {
             Some(new) => self.insert(key, new),
@@ -48,34 +40,24 @@ pub trait Store {
 impl Store for sled::Tree {
     type Error = Error<sled::Error>;
 
-    fn get<K>(&self, key: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
+    fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error> {
         self.get(key).map_err(Error::Store)
     }
 
-    fn insert<K, V>(&self, key: K, val: V) -> Result<Option<IVec>, Self::Error>
+    fn insert<V>(&self, key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
     {
         self.insert(key, val).map_err(Error::Store)
     }
 
-    fn remove<K>(&self, key: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
+    fn remove(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error> {
         self.remove(key).map_err(Error::Store)
     }
 
-    fn fetch_update<K, V, F>(&self, key: K, f: F) -> Result<Option<IVec>, Self::Error>
+    fn fetch_update<V, F>(&self, key: &[u8], f: F) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
         F: FnMut(Option<&[u8]>) -> Option<V>,
     {
         self.fetch_and_update(key, f).map_err(Error::Store)
@@ -85,31 +67,22 @@ impl Store for sled::Tree {
 impl Store for sled::TransactionalTree {
     type Error = Error<sled::ConflictableTransactionError>;
 
-    fn get<K>(&self, key: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
+    fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error> {
         self.get(key)
             .map_err(sled::ConflictableTransactionError::from)
             .map_err(Error::Store)
     }
 
-    fn insert<K, V>(&self, key: K, val: V) -> Result<Option<IVec>, Self::Error>
+    fn insert<V>(&self, key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
-        IVec: From<K> + From<V>,
-        K: AsRef<[u8]>,
+        IVec: From<V>,
     {
-        self.insert(key, val)
+        self.insert::<&[u8], _>(key, val)
             .map_err(sled::ConflictableTransactionError::from)
             .map_err(Error::Store)
     }
 
-    fn remove<K>(&self, key: K) -> Result<Option<IVec>, Self::Error>
-    where
-        IVec: From<K>,
-        K: AsRef<[u8]>,
-    {
+    fn remove(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error> {
         self.remove(key)
             .map_err(sled::ConflictableTransactionError::from)
             .map_err(Error::Store)
