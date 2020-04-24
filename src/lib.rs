@@ -13,7 +13,7 @@ mod error;
 pub use error::*;
 
 pub trait Store {
-    type Error;
+    type Error: std::error::Error;
 
     fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
