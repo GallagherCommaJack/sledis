@@ -88,12 +88,16 @@ impl Meta {
     }
 }
 
-pub trait ListStore: Store {
-    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
-
+pub trait ListReadStore: ReadStore {
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
 
     fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
+
+    fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
+}
+
+pub trait ListWriteStore: ListReadStore + WriteStore {
+    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
     fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
@@ -107,8 +111,6 @@ pub trait ListStore: Store {
 
     fn list_pop_back(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error>;
 
-    fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
-
     fn list_set<V>(&self, name: &[u8], ix: u64, val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>;
@@ -119,7 +121,7 @@ pub trait ListStore: Store {
 /// Returns the written `meta`.
 fn update_list_meta<S, F>(store: &S, name: &[u8], mut f: F) -> Result<Option<Meta>, S::Error>
 where
-    S: Store,
+    S: WriteStore,
     S::Error: From<Error>,
     F: FnMut(Option<Meta>) -> Result<Option<Meta>, S::Error>,
 {
@@ -158,17 +160,11 @@ where
     }
 }
 
-impl<S> ListStore for S
+impl<S> ListReadStore for S
 where
-    S: Store,
+    S: ReadStore,
     S::Error: From<Error>,
 {
-    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error> {
-        update_list_meta(self, name, |om| Ok(Some(om.unwrap_or_default())))
-            .transpose()
-            .unwrap()
-    }
-
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
         let key = Key::ListMeta(name).encode();
 
@@ -185,6 +181,35 @@ where
 
     fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error> {
         Ok(self.list_get_meta(name)?.as_ref().map(Meta::len))
+    }
+
+    fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error> {
+        let key = Key::ListMeta(name).encode();
+
+        if let Some(meta) = self
+            .get(&key)?
+            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.to_vec())))
+            .transpose()?
+        {
+            if let Some(ix) = meta.mk_key(ix) {
+                let key = Key::List(name, ix).encode();
+                return self.get(&key);
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+impl<S> ListWriteStore for S
+where
+    S: WriteStore + ListReadStore,
+    S::Error: From<Error>,
+{
+    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error> {
+        update_list_meta(self, name, |om| Ok(Some(om.unwrap_or_default())))
+            .transpose()
+            .unwrap()
     }
 
     fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
@@ -271,23 +296,6 @@ where
         } else {
             None
         })
-    }
-
-    fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error> {
-        let key = Key::ListMeta(name).encode();
-
-        if let Some(meta) = self
-            .get(&key)?
-            .map(|v| Meta::decode(&v).ok_or_else(|| InvalidMeta(name.to_vec())))
-            .transpose()?
-        {
-            if let Some(ix) = meta.mk_key(ix) {
-                let key = Key::List(name, ix).encode();
-                return self.get(&key);
-            }
-        }
-
-        Ok(None)
     }
 
     fn list_set<V>(&self, name: &[u8], ix: u64, val: V) -> Result<Option<IVec>, Self::Error>

@@ -1,5 +1,6 @@
 use bytes::*;
 use sled::IVec;
+use std::ops::RangeBounds;
 
 mod escaping;
 pub use escaping::*;
@@ -12,11 +13,13 @@ pub mod lists;
 mod error;
 pub use error::*;
 
-pub trait Store {
+pub trait ReadStore {
     type Error: std::error::Error;
 
     fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error>;
+}
 
+pub trait WriteStore: ReadStore {
     fn insert<V>(&self, key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>;
@@ -37,13 +40,24 @@ pub trait Store {
     }
 }
 
-impl Store for sled::Tree {
+pub trait TransactionalStore: WriteStore {}
+
+pub trait RangeStore: ReadStore {
+    type Iter: DoubleEndedIterator<Item = Result<IVec, Self::Error>>;
+    fn range<'a, R>(&self, range: R) -> Self::Iter
+    where
+        R: RangeBounds<&'a [u8]>;
+}
+
+impl ReadStore for sled::Tree {
     type Error = Error<sled::Error>;
 
     fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error> {
         self.get(key).map_err(Error::Store)
     }
+}
 
+impl WriteStore for sled::Tree {
     fn insert<V>(&self, key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>,
@@ -64,7 +78,7 @@ impl Store for sled::Tree {
     }
 }
 
-impl Store for sled::TransactionalTree {
+impl ReadStore for sled::TransactionalTree {
     type Error = Error<sled::ConflictableTransactionError>;
 
     fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error> {
@@ -72,7 +86,9 @@ impl Store for sled::TransactionalTree {
             .map_err(sled::ConflictableTransactionError::from)
             .map_err(Error::Store)
     }
+}
 
+impl WriteStore for sled::TransactionalTree {
     fn insert<V>(&self, key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>,
@@ -88,3 +104,5 @@ impl Store for sled::TransactionalTree {
             .map_err(Error::Store)
     }
 }
+
+impl TransactionalStore for sled::TransactionalTree {}

@@ -1,7 +1,7 @@
 use quickcheck::{Arbitrary, Gen};
 use quickcheck_macros::*;
 use sled::{Config, Tree};
-use sledis::lists::ListStore;
+use sledis::lists::*;
 use std::collections::VecDeque;
 
 fn set_up_list_store() -> Tree {
@@ -35,7 +35,7 @@ impl Arbitrary for DequeuOp {
 }
 
 // assert a list and a dequeue have the same contents
-fn deep_eq<S: ListStore, T: AsRef<[u8]> + std::fmt::Debug>(
+fn deep_eq<S: ListReadStore, T: AsRef<[u8]> + std::fmt::Debug>(
     store: &S,
     name: &[u8],
     deque: &VecDeque<T>,
@@ -66,8 +66,47 @@ fn pop_eq(deq_ret: Option<Vec<u8>>, sled_ret: Option<sled::IVec>) -> bool {
 
 #[quickcheck]
 // test API identicallity to std::collections::VecDeque.
-fn chaos_test_list((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> bool {
+fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> bool {
     // init list store
+    let store = set_up_list_store();
+    store.list_create(name).unwrap();
+
+    // init dequeue
+    let mut dequeue = VecDeque::new();
+
+    let ops_corr = ops.iter().all(|op| match op {
+        DequeuOp::PushFront(val) => {
+            dequeue.push_front(val.clone());
+            store.list_push_front(name, val.clone()).unwrap();
+            true
+        }
+        DequeuOp::PushBack(val) => {
+            dequeue.push_back(val.clone());
+            store.list_push_back(name, val.clone()).unwrap();
+            true
+        }
+        DequeuOp::PopFront => {
+            let deq_res = dequeue.pop_front();
+            let store_res = store.list_pop_front(name).unwrap();
+            pop_eq(deq_res, store_res)
+        }
+        DequeuOp::PopBack => {
+            let deq_res = dequeue.pop_front();
+            let store_res = store.list_pop_front(name).unwrap();
+            pop_eq(deq_res, store_res)
+        }
+    });
+
+    let res_eq = deep_eq(&store, name, &dequeue);
+
+    ops_corr && res_eq
+}
+
+#[quickcheck]
+// test API identicallity to std::collections::VecDeque.
+fn chaos_test_list_no_name(ops: Vec<DequeuOp>) -> bool {
+    // init list store
+    let name = b"chaos_test_no_name";
     let store = set_up_list_store();
     store.list_create(name).unwrap();
 
