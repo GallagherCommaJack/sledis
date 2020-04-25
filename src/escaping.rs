@@ -6,16 +6,21 @@ pub const ESCAPED_NULL: [u8; 2] = [0, 1];
 pub const TERMINATOR: [u8; 2] = [0, 0];
 
 #[derive(Eq, PartialEq, Hash, Clone)]
-pub struct ContainsNull;
+pub struct ContainsUnescapedNull;
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct EscapedVec(pub(crate) Bytes);
 
 impl TryFrom<Bytes> for EscapedVec {
-    type Error = ContainsNull;
-    fn try_from(input: Bytes) -> Result<EscapedVec, ContainsNull> {
-        if input.contains(&NULL) {
-            Err(ContainsNull)
+    type Error = ContainsUnescapedNull;
+    fn try_from(input: Bytes) -> Result<EscapedVec, ContainsUnescapedNull> {
+        if input.as_ref() == &[NULL] {
+            Err(ContainsUnescapedNull)
+        } else if input
+            .windows(2)
+            .any(|chrs| chrs[0] == NULL && chrs != ESCAPED_NULL)
+        {
+            Err(ContainsUnescapedNull)
         } else {
             Ok(EscapedVec(input))
         }
