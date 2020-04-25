@@ -1,6 +1,6 @@
 [package]
 name = "sledis"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["theseriousadult <jack@gallabytes.com>", "mobile-bungalow <pwmay@ucsc.edu>"]
 edition = "2018"
 description = "a datastructure store on top of sled"
