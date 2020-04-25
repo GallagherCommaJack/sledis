@@ -62,32 +62,34 @@ impl Meta {
         self.len
     }
 
-    pub fn push_front(&mut self) -> ListIndex {
+    fn push_front(&mut self) -> ListIndex {
         self.head -= 1;
         self.len += 1;
 
         self.head
     }
 
-    pub fn pop_front(&mut self) -> Option<ListIndex> {
+    fn pop_front(&mut self) -> Option<ListIndex> {
         let res = self.head_ix()?;
         self.head += 1;
         self.len -= 1;
         Some(res)
     }
 
-    pub fn push_back(&mut self) -> ListIndex {
+    fn push_back(&mut self) -> ListIndex {
         self.len += 1;
         self.head + self.len as ListIndex - 1
     }
 
-    pub fn pop_back(&mut self) -> Option<ListIndex> {
+    fn pop_back(&mut self) -> Option<ListIndex> {
         let res = self.tail_ix()?;
         self.len -= 1;
         Some(res)
     }
 }
 
+/// Types that implement this trait provide a byte-slice-indexed table of arrays.
+/// `ListReadStore` is implemented for arbitrary `ReadStore`s.
 pub trait ListReadStore: ReadStore {
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
 
@@ -96,6 +98,31 @@ pub trait ListReadStore: ReadStore {
     fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
 }
 
+/// This trait provides deque semantics for the lists in `ListReadStore`.
+/// # Example Initialization
+/// ```
+/// use sledis::lists::{ListReadStore, ListWriteStore};
+/// use sled::Config;
+///
+/// let tree = Config::new().temporary(true).open().unwrap();
+///
+/// let list_meta_data = tree.list_create(b"my_list").unwrap();
+/// // A new empty list
+/// assert_eq!(list_meta_data.len(), 0);
+/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 0);
+///
+/// // pushing and popping from the front
+/// tree.list_push_front(b"my_list", b"oof").unwrap();
+/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 1);
+/// assert_eq!(tree.list_pop_front(b"my_list").unwrap().unwrap(), b"oof");
+/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 0);
+///
+/// // and the back
+/// tree.list_push_back(b"my_list", b"oof").unwrap();
+/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 1);
+/// assert_eq!(tree.list_pop_back(b"my_list").unwrap().unwrap(), b"oof");
+/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 0);
+/// ```
 pub trait ListWriteStore: ListReadStore + WriteStore {
     fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
