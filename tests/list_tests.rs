@@ -64,24 +64,9 @@ fn pop_eq(deq_ret: Option<Vec<u8>>, sled_ret: Option<sled::IVec>) -> bool {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ModelTestInfo {
-    name: Vec<u8>,
-    ops: Vec<DequeuOp>,
-}
-
-impl Arbitrary for ModelTestInfo {
-    fn arbitrary<G: Gen>(gen: &mut G) -> Self {
-        ModelTestInfo {
-            name: Vec::arbitrary(gen),
-            ops: Vec::arbitrary(gen),
-        }
-    }
-}
-
 #[quickcheck]
 // test API identicallity to std::collections::VecDeque.
-fn chaos_test_list(ModelTestInfo { ref name, ref ops }: ModelTestInfo) -> bool {
+fn chaos_test_list((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> bool {
     // init list store
     let store = set_up_list_store();
     store.list_create(name).unwrap();
