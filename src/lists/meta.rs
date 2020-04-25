@@ -60,6 +60,10 @@ impl Meta {
         self.len
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub(super) fn push_front(&mut self) -> ListIndex {
         self.head -= 1;
         self.len += 1;
