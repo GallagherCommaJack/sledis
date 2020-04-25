@@ -93,13 +93,12 @@ impl Meta {
 /// # Example Initialization
 /// ```
 /// use sledis::lists::ListStore;
-/// use sled::Config;
+/// use sled::{Config};
+/// let config = Config::new().temporary(true);
+///let t = config.open().unwrap();
+
+/// let db =
 ///
-/// let tree = Config::new().temporary(true).open().unwrap();
-///
-/// let list_meta_data = tree.list_create(b"my_list").unwrap();
-/// // A new empty list
-/// assert!(list_meta_data.len(), 0);
 /// ```
 pub trait ListStore: Store {
     fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
