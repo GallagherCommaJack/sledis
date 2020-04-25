@@ -1,10 +1,10 @@
 [package]
 name = "sledis"
 version = "0.1.0"
-authors = ["theseriousadult <jack@gallabytes.com>"]
+authors = ["theseriousadult <jack@gallabytes.com>", "mobile-bungalow <pwmay@ucsc.edu>"]
 edition = "2018"
 description = "a datastructure store on top of sled"
-
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 sled = "0.31.0"
