@@ -3,8 +3,8 @@ use super::*;
 // list metadata type
 #[derive(Default, Copy, Clone, Eq, PartialEq, Debug)]
 pub struct Meta {
-    pub head: ListIndex,
-    pub len: u64,
+    head: ListIndex,
+    len: u64,
 }
 
 pub const META_SIZE: usize = INDEX_BYTES + 8;
