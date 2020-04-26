@@ -6,17 +6,23 @@ pub const INDEX_BYTES: usize = 16;
 #[derive(Eq, PartialEq, Hash, Clone, Copy)]
 pub enum Key<'a> {
     Blob(&'a [u8]),
-    List(&'a [u8], ListIndex),
-    ListMeta(&'a [u8]),
-    SubMap(&'a [u8], &'a [u8]),
-    MapMeta(&'a [u8]),
+    List {
+        name: &'a [u8],
+        ix: Option<ListIndex>,
+    },
+    Table {
+        name: &'a [u8],
+        key: Option<&'a [u8]>,
+    },
 }
 
-const BLOB_TAG: u8 = 2;
-const LIST_TAG: u8 = 3;
-const LIST_META_TAG: u8 = 4;
-const MAP_TAG: u8 = 5;
-const MAP_META_TAG: u8 = 6;
+#[derive(Eq, PartialEq, Hash, Clone, Copy)]
+#[repr(u8)]
+enum Tag {
+    Blob = 0,
+    List = 1,
+    Table = 2,
+}
 
 pub fn encode_list_index(i: ListIndex) -> [u8; INDEX_BYTES] {
     (i ^ ListIndex::min_value()).to_be_bytes()
@@ -37,33 +43,52 @@ impl<'a> Key<'a> {
     pub fn encode(&self) -> Vec<u8> {
         let mut out;
         match self {
-            Key::Blob(b) => {
-                out = Vec::with_capacity(1 + b.len() + 2);
-                out.push(BLOB_TAG);
-                out.extend_from_slice(escape(b).as_ref());
+            Key::Blob(name) => {
+                out = Vec::with_capacity(1 + name.len() + 2);
+                out.push(Tag::Blob as u8);
+                out.extend_from_slice(escape(name).as_ref());
             }
-            Key::List(k, ix) => {
-                out = Vec::with_capacity(1 + k.len() + 2 + INDEX_BYTES);
-                out.push(LIST_TAG);
-                out.extend_from_slice(escape(k).as_ref());
-                let ix_bytes = encode_list_index(*ix);
-                out.extend_from_slice(&ix_bytes);
+            Key::List { name, ix } => {
+                let escaped_name = escape(name);
+                out = Vec::with_capacity(
+                    1 // tag
+                    + escaped_name.len() // null terminated name
+                    + 1 // meta or item
+                    + ix.map_or_else(|| 0, |_| INDEX_BYTES), // index
+                );
+                out.push(Tag::List as u8);
+                out.extend_from_slice(&escaped_name);
+                match ix {
+                    None => {
+                        out.push(0);
+                    }
+                    Some(ix) => {
+                        out.push(1);
+                        let ix_bytes = encode_list_index(*ix);
+                        out.extend_from_slice(&ix_bytes);
+                    }
+                }
             }
-            Key::ListMeta(k) => {
-                out = Vec::with_capacity(1 + k.len() + 2);
-                out.push(LIST_META_TAG);
-                out.extend_from_slice(escape(k).as_ref());
-            }
-            Key::SubMap(k1, k2) => {
-                out = Vec::with_capacity(1 + k1.len() + 2 + k2.len() + 2);
-                out.push(MAP_TAG);
-                out.extend_from_slice(escape(k1).as_ref());
-                out.extend_from_slice(escape(k2).as_ref());
-            }
-            Key::MapMeta(k) => {
-                out = Vec::with_capacity(1 + k.len() + 2);
-                out.push(MAP_META_TAG);
-                out.extend_from_slice(escape(k).as_ref());
+            Key::Table { name, key } => {
+                let escaped_name = escape(name);
+                let escaped_key = key.map(escape);
+                out = Vec::with_capacity(
+                    1 // tag
+                    + escaped_name.len() // null terminated name
+                    + 1 // meta or item
+                    + escaped_key.as_ref().map_or_else(|| 0, |k| k.len()), // null terminated key
+                );
+                out.push(Tag::Table as u8);
+                out.extend_from_slice(&escaped_name);
+                match escaped_key {
+                    None => {
+                        out.push(0);
+                    }
+                    Some(key) => {
+                        out.push(1);
+                        out.extend_from_slice(&key);
+                    }
+                }
             }
         }
         out
