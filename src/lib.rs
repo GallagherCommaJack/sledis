@@ -8,7 +8,8 @@ pub use escaping::*;
 mod keys;
 pub use keys::*;
 
-pub mod lists;
+pub mod list;
+pub use list::{ListReadStore, ListWriteStore};
 
 mod error;
 pub use error::*;

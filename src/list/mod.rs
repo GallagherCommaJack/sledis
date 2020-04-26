@@ -18,7 +18,7 @@ pub trait ListReadStore: ReadStore {
 /// This trait provides deque semantics for the lists in `ListReadStore`.
 /// # Example Initialization
 /// ```
-/// use sledis::lists::{ListReadStore, ListWriteStore};
+/// use sledis::{ListReadStore, ListWriteStore};
 /// use sled::Config;
 ///
 /// let tree = Config::new().temporary(true).open().unwrap();

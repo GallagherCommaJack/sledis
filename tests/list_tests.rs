@@ -1,7 +1,7 @@
 use quickcheck::{Arbitrary, Gen};
 use quickcheck_macros::*;
 use sled::{Config, Tree};
-use sledis::lists::*;
+use sledis::*;
 use std::collections::VecDeque;
 
 fn set_up_list_store() -> Tree {
