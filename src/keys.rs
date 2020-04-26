@@ -52,12 +52,13 @@ impl<'a> Key<'a> {
                 let escaped_name = escape(name);
                 out = Vec::with_capacity(
                     1 // tag
-                    + escaped_name.len() // null terminated name
+                    + escaped_name.len() + 2 // null terminated name
                     + 1 // meta or item
                     + ix.map_or_else(|| 0, |_| INDEX_BYTES), // index
                 );
                 out.push(Tag::List as u8);
                 out.extend_from_slice(&escaped_name);
+                out.extend_from_slice(&TERMINATOR);
                 match ix {
                     None => {
                         out.push(0);
@@ -74,12 +75,13 @@ impl<'a> Key<'a> {
                 let escaped_key = key.map(escape);
                 out = Vec::with_capacity(
                     1 // tag
-                    + escaped_name.len() // null terminated name
+                    + escaped_name.len() + 2 // null terminated name
                     + 1 // meta or item
                     + escaped_key.as_ref().map_or_else(|| 0, |k| k.len()), // null terminated key
                 );
                 out.push(Tag::Table as u8);
                 out.extend_from_slice(&escaped_name);
+                out.extend_from_slice(&TERMINATOR);
                 match escaped_key {
                     None => {
                         out.push(0);

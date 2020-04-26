@@ -7,10 +7,7 @@ pub const ESCAPED_NULL: [u8; 2] = [NULL, ESCAPE_CHAR];
 pub const TERMINATOR: [u8; 2] = [0, 255];
 
 #[derive(Eq, PartialEq, Hash, Clone)]
-pub enum NotEscaped {
-    ContainsUnescapedNull,
-    MissingTerminator,
-}
+pub struct NotEscaped;
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct EscapedVec(pub(crate) Bytes);
@@ -18,34 +15,11 @@ pub struct EscapedVec(pub(crate) Bytes);
 impl TryFrom<Bytes> for EscapedVec {
     type Error = NotEscaped;
     fn try_from(input: Bytes) -> Result<EscapedVec, NotEscaped> {
-        if input.len() < 2 {
-            return Err(NotEscaped::MissingTerminator);
+        if is_escaped(input.as_ref()) {
+            Ok(EscapedVec(input))
+        } else {
+            Err(NotEscaped)
         }
-
-        let (content, terminator) = input.split_at(input.len() - 2);
-        if terminator != &TERMINATOR {
-            return Err(NotEscaped::MissingTerminator);
-        }
-
-        let mut nulls_escaped = true;
-
-        for byte in content {
-            if !nulls_escaped {
-                if *byte == ESCAPE_CHAR {
-                    nulls_escaped = true
-                } else {
-                    return Err(NotEscaped::ContainsUnescapedNull);
-                }
-            } else if *byte == NULL {
-                nulls_escaped = false
-            }
-        }
-
-        if !nulls_escaped {
-            return Err(NotEscaped::ContainsUnescapedNull);
-        }
-
-        Ok(EscapedVec(input))
     }
 }
 
@@ -67,13 +41,10 @@ impl EscapedVec {
     }
 
     pub fn unescape(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.len() - 2);
+        let mut out = Vec::with_capacity(self.len());
         let mut was_escape = false;
 
-        // subtract 2 from len to remove terminator
-        let bytes = self[..self.len() - 2].iter();
-
-        for byt in bytes {
+        for byt in self.0.as_ref() {
             if *byt == NULL {
                 out.push(NULL);
                 was_escape = true;
@@ -88,8 +59,26 @@ impl EscapedVec {
     }
 }
 
+pub fn is_escaped(input: &[u8]) -> bool {
+    let mut nulls_escaped = true;
+
+    for byte in input.as_ref() {
+        if !nulls_escaped {
+            if *byte == ESCAPE_CHAR {
+                nulls_escaped = true
+            } else {
+                return false;
+            }
+        } else if *byte == NULL {
+            nulls_escaped = false
+        }
+    }
+
+    nulls_escaped
+}
+
 pub fn escape(input: &[u8]) -> EscapedVec {
-    escape_with_size_hint(input, input.len() + 2)
+    escape_with_size_hint(input, input.len())
 }
 
 pub fn escape_with_size_hint(input: &[u8], hint: usize) -> EscapedVec {
@@ -101,6 +90,6 @@ pub fn escape_with_size_hint(input: &[u8], hint: usize) -> EscapedVec {
             out.push(*chr);
         }
     }
-    out.extend_from_slice(&TERMINATOR);
+
     EscapedVec(out.into())
 }
