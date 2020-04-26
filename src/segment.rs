@@ -7,6 +7,13 @@ pub struct Segment<Inner = sled::IVec> {
     end: usize,
 }
 
+impl<Inner: AsRef<[u8]>> From<Inner> for Segment<Inner> {
+    #[inline(always)]
+    fn from(inner: Inner) -> Self {
+        Segment::new(inner)
+    }
+}
+
 impl<Inner: AsRef<[u8]>> AsRef<[u8]> for Segment<Inner> {
     #[inline(always)]
     fn as_ref(&self) -> &[u8] {
