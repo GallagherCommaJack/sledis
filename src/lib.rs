@@ -2,8 +2,8 @@ use bytes::*;
 use sled::IVec;
 use std::ops::RangeBounds;
 
-mod escaping;
-pub use escaping::*;
+pub mod escaping;
+use escaping::*;
 
 mod keys;
 pub use keys::*;
