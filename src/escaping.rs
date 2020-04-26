@@ -9,12 +9,14 @@ pub const TERMINATOR: [u8; 2] = [0, 255];
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct NotEscaped;
 
-#[derive(Eq, PartialEq, Hash, Clone)]
-pub struct EscapedVec(pub(crate) Bytes);
+pub type EscapedVecInner = Segment;
 
-impl TryFrom<Bytes> for EscapedVec {
+#[derive(Eq, PartialEq, Hash, Clone)]
+pub struct EscapedVec(pub(crate) EscapedVecInner);
+
+impl TryFrom<EscapedVecInner> for EscapedVec {
     type Error = NotEscaped;
-    fn try_from(input: Bytes) -> Result<EscapedVec, NotEscaped> {
+    fn try_from(input: EscapedVecInner) -> Result<EscapedVec, NotEscaped> {
         if is_escaped(input.as_ref()) {
             Ok(EscapedVec(input))
         } else {
@@ -24,8 +26,8 @@ impl TryFrom<Bytes> for EscapedVec {
 }
 
 impl Deref for EscapedVec {
-    type Target = Bytes;
-    fn deref(&self) -> &Bytes {
+    type Target = EscapedVecInner;
+    fn deref(&self) -> &EscapedVecInner {
         &self.0
     }
 }
@@ -36,7 +38,7 @@ impl EscapedVec {
     /// # Safety
     ///
     /// `bs` must not contain any unescaped `[NULL]` bytes.
-    pub unsafe fn from_bytes_unchecked(bs: Bytes) -> Self {
+    pub unsafe fn from_bytes_unchecked(bs: EscapedVecInner) -> Self {
         Self(bs)
     }
 
@@ -91,5 +93,5 @@ pub fn escape_with_size_hint(input: &[u8], hint: usize) -> EscapedVec {
         }
     }
 
-    EscapedVec(out.into())
+    EscapedVec(Segment::new(out.into()))
 }

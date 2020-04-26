@@ -1,4 +1,3 @@
-use bytes::*;
 use sled::IVec;
 use std::ops::RangeBounds;
 
@@ -10,6 +9,12 @@ pub use keys::*;
 
 pub mod list;
 pub use list::{ListReadStore, ListWriteStore};
+
+pub mod table;
+pub use table::{TableReadStore, TableWriteStore};
+
+mod segment;
+pub use segment::*;
 
 mod error;
 pub use error::*;

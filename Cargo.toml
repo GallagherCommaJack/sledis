@@ -3,13 +3,12 @@ name = "sledis"
 version = "0.0.1"
 authors = ["theseriousadult <jack@gallabytes.com>", "mobile-bungalow <pwmay@ucsc.edu>"]
 edition = "2018"
-description = "a datastructure store on top of sled"
+description = "an embeddable datastructure store on top of sled"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/GallagherCommaJack/sledis"
 
 [dependencies]
 sled = "0.31.0"
-bytes = "0.5.4"
 thiserror = "1.0.15"
 
 [dev-dependencies]
