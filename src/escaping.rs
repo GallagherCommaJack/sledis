@@ -3,7 +3,7 @@ use std::{convert::TryFrom, ops::Deref};
 
 pub const NULL: u8 = 0;
 pub const ESCAPED_NULL: [u8; 2] = [0, 1];
-pub const TERMINATOR: [u8; 2] = [0, 0];
+pub const TERMINATOR: [u8; 2] = [0, 255];
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct ContainsUnescapedNull;
@@ -42,6 +42,24 @@ impl EscapedVec {
     /// `bs` must not contain any unescaped `[NULL]` bytes.
     pub unsafe fn from_bytes_unchecked(bs: Bytes) -> Self {
         Self(bs)
+    }
+
+    pub fn unescape(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.len());
+        let mut was_escape = false;
+
+        for byt in self.0.iter() {
+            if *byt == NULL {
+                out.push(NULL);
+                was_escape = true;
+            } else if was_escape {
+                was_escape = false;
+            } else {
+                out.push(*byt)
+            }
+        }
+
+        out
     }
 }
 
