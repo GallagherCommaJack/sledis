@@ -14,6 +14,8 @@ pub trait TableWriteStore: WriteStore {
     fn table_insert<V>(&self, name: &[u8], key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>;
+
+    fn table_remove(&self, name: &[u8], key: &[u8]) -> Result<Option<IVec>, Self::Error>;
 }
 
 impl<S> TableReadStore for S
@@ -114,6 +116,27 @@ where
             }
 
             Ok(Some(meta))
+        })?;
+
+        Ok(old)
+    }
+
+    fn table_remove(&self, name: &[u8], key: &[u8]) -> Result<Option<IVec>, Self::Error> {
+        let key = Key::Table {
+            name,
+            key: Some(key),
+        }
+        .encode();
+
+        let old = self.remove(&key)?;
+
+        update_table_meta(self, name, |meta| {
+            Ok(meta.map(|mut meta| {
+                if old.is_some() {
+                    meta.len -= 1
+                }
+                meta
+            }))
         })?;
 
         Ok(old)
