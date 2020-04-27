@@ -24,7 +24,7 @@ enum DequeuOp {
 
 impl Arbitrary for DequeuOp {
     fn arbitrary<G: Gen>(gen: &mut G) -> Self {
-        match gen.next_u32() % 3 {
+        match gen.next_u32() % 4 {
             0 => Self::PushFront(Vec::arbitrary(gen)),
             1 => Self::PopFront,
             2 => Self::PushBack(Vec::arbitrary(gen)),

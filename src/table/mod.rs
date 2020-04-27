@@ -46,6 +46,92 @@ where
     }
 }
 
+fn update_table_meta<S, F>(store: &S, name: &[u8], mut f: F) -> Result<Option<Meta>, S::Error>
+where
+    S: WriteStore,
+    S::Error: From<Error>,
+    F: FnMut(Option<Meta>) -> Result<Option<Meta>, S::Error>,
+{
+    let key = Key::Table { name, key: None }.encode();
+    let mut err: Option<S::Error> = None;
+    let mut meta: Option<Meta> = None;
+
+    store.fetch_update::<IVec, _>(&key, |iv| {
+        let got = if let Some(bs) = iv {
+            if let Some(got) = Meta::decode(Segment::new(bs.into())) {
+                Some(got)
+            } else {
+                err = Some(InvalidMeta(name.to_vec()).into());
+                return Some(bs.into());
+            }
+        } else {
+            None
+        };
+
+        match f(got) {
+            Ok(m) => {
+                err = None;
+                let res = m.as_ref().map(Meta::encode).map(IVec::from);
+                meta = m;
+                res
+            }
+            Err(e) => {
+                err = Some(e);
+                iv.map(IVec::from)
+            }
+        }
+    })?;
+
+    if let Some(e) = err {
+        Err(e)
+    } else {
+        Ok(meta)
+    }
+}
+
+impl<S> TableWriteStore for S
+where
+    S: WriteStore,
+    S::Error: From<Error>,
+{
+    fn table_set<V>(&self, name: &[u8], key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
+    where
+        IVec: From<V>,
+    {
+        let key = Key::Table {
+            name,
+            key: Some(key),
+        }
+        .encode();
+
+        let old = self.insert(&key, val)?;
+
+        let as_seg: Segment = Segment::new(name.into());
+
+        update_table_meta(self, name, |meta| {
+            let mut meta = meta.unwrap_or_default();
+
+            if old.is_none() {
+                meta.len += 1;
+            }
+
+            if let Some(low) = meta.lowest_key.take() {
+                let new_low = std::cmp::min(low, as_seg.clone());
+                meta.lowest_key.replace(new_low);
+            }
+
+            if let Some(high) = meta.highest_key.take() {
+                let new_high = std::cmp::max(high, as_seg.clone());
+                meta.highest_key.replace(new_high);
+            }
+
+            Ok(Some(meta))
+        })?;
+
+        Ok(old)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("invalid table metadata, key was: {0:#?}")]

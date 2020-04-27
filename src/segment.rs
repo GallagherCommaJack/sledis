@@ -1,10 +1,33 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    cmp::Ordering,
+    ops::{Deref, DerefMut},
+};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub struct Segment<Inner = sled::IVec> {
     inner: Inner,
     start: usize,
     end: usize,
+}
+
+impl PartialEq for Segment {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref().eq(other.as_ref())
+    }
+}
+
+impl Eq for Segment {}
+
+impl PartialOrd for Segment {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Segment {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_ref().cmp(other.as_ref())
+    }
 }
 
 impl<Inner: AsRef<[u8]>> From<Inner> for Segment<Inner> {
