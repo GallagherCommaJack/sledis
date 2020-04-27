@@ -11,7 +11,7 @@ pub trait TableReadStore: ReadStore {
 }
 
 pub trait TableWriteStore: WriteStore {
-    fn table_set<V>(&self, name: &[u8], key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
+    fn table_insert<V>(&self, name: &[u8], key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>;
 }
@@ -94,7 +94,7 @@ where
     S: WriteStore,
     S::Error: From<Error>,
 {
-    fn table_set<V>(&self, name: &[u8], key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
+    fn table_insert<V>(&self, name: &[u8], key: &[u8], val: V) -> Result<Option<IVec>, Self::Error>
     where
         IVec: From<V>,
     {
