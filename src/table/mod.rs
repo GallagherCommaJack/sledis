@@ -106,23 +106,11 @@ where
 
         let old = self.insert(&key, val)?;
 
-        let as_seg: Segment = Segment::new(name.into());
-
         update_table_meta(self, name, |meta| {
             let mut meta = meta.unwrap_or_default();
 
             if old.is_none() {
                 meta.len += 1;
-            }
-
-            if let Some(low) = meta.lowest_key.take() {
-                let new_low = std::cmp::min(low, as_seg.clone());
-                meta.lowest_key.replace(new_low);
-            }
-
-            if let Some(high) = meta.highest_key.take() {
-                let new_high = std::cmp::max(high, as_seg.clone());
-                meta.highest_key.replace(new_high);
             }
 
             Ok(Some(meta))
