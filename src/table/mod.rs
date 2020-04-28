@@ -122,11 +122,15 @@ where
         let old = self.remove(&key)?;
 
         update_table_meta(self, name, |meta| {
-            meta.map(|mut meta| {
+            meta.and_then(|mut meta| {
                 if old.is_some() {
                     meta.len -= 1
                 }
-                meta
+                if meta.len == 0 {
+                    None
+                } else {
+                    Some(meta)
+                }
             })
         })?;
 
