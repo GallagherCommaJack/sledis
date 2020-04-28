@@ -4,7 +4,7 @@ use std::ops::RangeBounds;
 pub mod escaping;
 use escaping::*;
 
-mod keys;
+pub mod keys;
 pub use keys::*;
 
 pub mod list;

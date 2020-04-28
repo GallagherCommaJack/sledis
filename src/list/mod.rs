@@ -69,7 +69,7 @@ where
     S::Error: From<Error>,
     F: FnMut(Option<Meta>) -> Result<Option<Meta>, S::Error>,
 {
-    let key = Key::List { name, ix: None }.encode();
+    let key = keys::list_meta(name);
     let mut err: Option<S::Error> = None;
     let mut meta: Option<Meta> = None;
 
@@ -110,7 +110,7 @@ where
     S::Error: From<Error>,
 {
     fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
-        let key = Key::List { name, ix: None }.encode();
+        let key = keys::list_meta(name);
 
         if let Some(bs) = self.get(&key)? {
             if let Some(got) = Meta::decode(&bs) {
@@ -128,7 +128,7 @@ where
     }
 
     fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error> {
-        let key = Key::List { name, ix: None }.encode();
+        let key = keys::list_meta(name);
 
         if let Some(meta) = self
             .get(&key)?
@@ -136,7 +136,7 @@ where
             .transpose()?
         {
             if let Some(ix) = meta.mk_key(ix) {
-                let key = Key::List { name, ix: Some(ix) }.encode();
+                let key = keys::list(name, ix);
                 return self.get(&key);
             }
         }
@@ -170,7 +170,7 @@ where
         })?
         .unwrap();
 
-        self.insert(&Key::List { name, ix: Some(ix) }.encode(), val)?;
+        self.insert(&keys::list(name, ix), val)?;
 
         Ok(())
     }
@@ -189,7 +189,7 @@ where
         })?
         .unwrap();
 
-        self.insert(&Key::List { name, ix: Some(ix) }.encode(), val)?;
+        self.insert(&keys::list(name, ix), val)?;
 
         Ok(())
     }
@@ -205,8 +205,8 @@ where
         .unwrap();
 
         Ok(if let Some(ix) = ix {
-            let key = Key::List { name, ix: Some(ix) };
-            let res = self.remove(&key.encode())?;
+            let key = keys::list(name, ix);
+            let res = self.remove(&key)?;
 
             if res.is_none() {
                 return Err(MissingVal(name.to_vec(), ix).into());
@@ -229,8 +229,8 @@ where
         .unwrap();
 
         Ok(if let Some(ix) = ix {
-            let key = Key::List { name, ix: Some(ix) };
-            let res = self.remove(&key.encode())?;
+            let key = keys::list(name, ix);
+            let res = self.remove(&key)?;
 
             if res.is_none() {
                 return Err(MissingVal(name.to_vec(), ix).into());
@@ -246,7 +246,7 @@ where
     where
         IVec: From<V>,
     {
-        let key = Key::List { name, ix: None }.encode();
+        let key = keys::list_meta(name);
 
         if let Some(meta) = self
             .get(&key)?
@@ -254,7 +254,7 @@ where
             .transpose()?
         {
             if let Some(ix) = meta.mk_key(ix) {
-                let key = Key::List { name, ix: Some(ix) }.encode();
+                let key = keys::list(name, ix);
                 return self.insert(&key, val);
             }
         }

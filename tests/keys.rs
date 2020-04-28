@@ -5,14 +5,10 @@ use sledis::*;
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum OwnedKey {
     Blob(Vec<u8>),
-    List {
-        name: Vec<u8>,
-        ix: Option<ListIndex>,
-    },
-    Table {
-        name: Vec<u8>,
-        key: Option<Vec<u8>>,
-    },
+    List(Vec<u8>, ListIndex),
+    ListMeta(Vec<u8>),
+    Table(Vec<u8>, Vec<u8>),
+    TableMeta(Vec<u8>),
 }
 
 use OwnedKey::*;
@@ -20,54 +16,48 @@ use OwnedKey::*;
 impl Arbitrary for OwnedKey {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         let tag = u8::arbitrary(g);
-        match tag % 3 {
-            0 => OwnedKey::Blob(Vec::arbitrary(g)),
-            1 => OwnedKey::List {
-                name: Vec::arbitrary(g),
-                ix: Option::arbitrary(g),
-            },
-            2 => OwnedKey::Table {
-                name: Vec::arbitrary(g),
-                key: Option::arbitrary(g),
-            },
+        match tag % 5 {
+            0 => Blob(Vec::arbitrary(g)),
+            1 => List(Vec::arbitrary(g), ListIndex::arbitrary(g)),
+            2 => ListMeta(Vec::arbitrary(g)),
+            3 => Table(Vec::arbitrary(g), Vec::arbitrary(g)),
+            4 => TableMeta(Vec::arbitrary(g)),
             _ => unreachable!(),
         }
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
         match self {
-            Blob(bs) => Box::new(bs.shrink().map(Blob)),
-            List { name, ix } => Box::new(
+            Blob(name) => Box::new(name.shrink().map(Blob)),
+            List(name, ix) => Box::new(
                 (name.clone(), ix.clone())
                     .shrink()
-                    .map(|(name, ix)| List { name, ix }),
+                    .map(|(name, ix)| List(name, ix)),
             ),
-            Table { name, key } => Box::new(
+            ListMeta(name) => Box::new(name.shrink().map(ListMeta)),
+            Table(name, key) => Box::new(
                 (name.clone(), key.clone())
                     .shrink()
-                    .map(|(name, key)| Table { name, key }),
+                    .map(|(name, key)| Table(name, key)),
             ),
+            TableMeta(name) => Box::new(name.shrink().map(TableMeta)),
         }
     }
 }
 
 impl OwnedKey {
-    fn as_key(&self) -> Key {
+    fn encode(&self) -> Vec<u8> {
         match self {
-            Blob(name) => Key::Blob(&name),
-            List { name, ix } => Key::List {
-                name: &name,
-                ix: *ix,
-            },
-            Table { name, key } => Key::Table {
-                name: &name,
-                key: key.as_ref().map(AsRef::as_ref),
-            },
+            Blob(name) => keys::blob(name),
+            List(name, ix) => keys::list(name, *ix),
+            ListMeta(name) => keys::list_meta(name),
+            Table(name, key) => keys::table(name, key),
+            TableMeta(name) => keys::table_meta(name),
         }
     }
 }
 
 #[quickcheck]
 fn encode_inj((k1, k2): (OwnedKey, OwnedKey)) -> bool {
-    (k1 == k2) == (k1.as_key().encode() == k2.as_key().encode())
+    (k1 == k2) == (k1.encode() == k2.encode())
 }
