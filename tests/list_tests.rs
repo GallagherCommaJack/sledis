@@ -40,10 +40,7 @@ fn deep_eq<S: ListReadStore, T: AsRef<[u8]> + std::fmt::Debug>(
     name: &[u8],
     deque: &VecDeque<T>,
 ) -> bool {
-    let len = store
-        .list_len(name)
-        .expect("store error")
-        .expect("list not found");
+    let len = store.list_len(name).expect("store error");
 
     (0..len).all(|idx| {
         store
@@ -69,7 +66,6 @@ fn pop_eq(deq_ret: Option<Vec<u8>>, sled_ret: Option<sled::IVec>) -> bool {
 fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> bool {
     // init list store
     let store = set_up_list_store();
-    store.list_create(name).unwrap();
 
     // init dequeue
     let mut dequeue = VecDeque::new();
@@ -108,7 +104,6 @@ fn chaos_test_list_no_name(ops: Vec<DequeuOp>) -> bool {
     // init list store
     let name = b"chaos_test_no_name";
     let store = set_up_list_store();
-    store.list_create(name).unwrap();
 
     // init dequeue
     let mut dequeue = VecDeque::new();

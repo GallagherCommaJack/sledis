@@ -5,7 +5,7 @@ mod meta;
 pub use self::meta::*;
 
 pub trait TableReadStore: ReadStore {
-    fn table_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
+    fn table_get_meta(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
     fn table_get(&self, name: &[u8], key: &[u8]) -> Result<Option<IVec>, Self::Error>;
 }
@@ -33,17 +33,13 @@ where
     S: ReadStore,
     S::Error: From<Error>,
 {
-    fn table_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
+    fn table_get_meta(&self, name: &[u8]) -> Result<Meta, Self::Error> {
         let key = keys::table_meta(name);
 
         if let Some(bs) = self.get(&key)? {
-            if let Some(got) = Meta::decode(Segment::new(bs)) {
-                Ok(Some(got))
-            } else {
-                Err(InvalidMeta(name.to_vec()).into())
-            }
+            Meta::decode(Segment::new(bs)).ok_or_else(|| InvalidMeta(name.to_vec()).into())
         } else {
-            Ok(None)
+            Ok(Meta::default())
         }
     }
 
@@ -58,7 +54,7 @@ fn update_table_meta<S, F>(store: &S, name: &[u8], mut f: F) -> Result<Option<Me
 where
     S: WriteStore,
     S::Error: From<Error>,
-    F: FnMut(Option<Meta>) -> Option<Meta>,
+    F: FnMut(Meta) -> Option<Meta>,
 {
     let key = keys::table_meta(name);
     let mut err: Option<S::Error> = None;
@@ -68,13 +64,13 @@ where
         let got = if let Some(bs) = iv {
             if let Some(got) = Meta::decode(Segment::new(bs.into())) {
                 err = None;
-                Some(got)
+                got
             } else {
                 err = Some(InvalidMeta(name.to_vec()).into());
                 return Some(bs.into());
             }
         } else {
-            None
+            Meta::default()
         };
 
         let new = f(got);
@@ -103,9 +99,7 @@ where
 
         let old = self.insert(&key, val)?;
 
-        update_table_meta(self, name, |meta| {
-            let mut meta = meta.unwrap_or_default();
-
+        update_table_meta(self, name, |mut meta| {
             if old.is_none() {
                 meta.len += 1;
             }
@@ -121,17 +115,16 @@ where
 
         let old = self.remove(&key)?;
 
-        update_table_meta(self, name, |meta| {
-            meta.and_then(|mut meta| {
-                if old.is_some() {
-                    meta.len -= 1
-                }
-                if meta.len == 0 {
-                    None
-                } else {
-                    Some(meta)
-                }
-            })
+        update_table_meta(self, name, |mut meta| {
+            if old.is_some() {
+                meta.len -= 1
+            }
+
+            if meta.len == 0 {
+                None
+            } else {
+                Some(meta)
+            }
         })?;
 
         Ok(old)
@@ -168,19 +161,19 @@ where
 
         match ldiff {
             LenDiff::Incr => {
-                update_table_meta(self, name, |meta| {
-                    meta.map(|mut meta| {
-                        meta.len += 1;
-                        meta
-                    })
+                update_table_meta(self, name, |mut meta| {
+                    meta.len += 1;
+                    Some(meta)
                 })?;
             }
             LenDiff::Decr => {
-                update_table_meta(self, name, |meta| {
-                    meta.map(|mut meta| {
-                        meta.len -= 1;
-                        meta
-                    })
+                update_table_meta(self, name, |mut meta| {
+                    meta.len -= 1;
+                    if meta.len == 0 {
+                        None
+                    } else {
+                        Some(meta)
+                    }
                 })?;
             }
             LenDiff::None => {}

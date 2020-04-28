@@ -8,9 +8,9 @@ pub use self::meta::*;
 /// Types that implement this trait provide a byte-slice-indexed table of arrays.
 /// `ListReadStore` is implemented for arbitrary `ReadStore`s.
 pub trait ListReadStore: ReadStore {
-    fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error>;
+    fn list_get_meta(&self, name: &[u8]) -> Result<Meta, Self::Error>;
 
-    fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error>;
+    fn list_len(&self, name: &[u8]) -> Result<u64, Self::Error>;
 
     fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error>;
 }
@@ -23,26 +23,24 @@ pub trait ListReadStore: ReadStore {
 ///
 /// let tree = Config::new().temporary(true).open().unwrap();
 ///
-/// let list_meta_data = tree.list_create(b"my_list").unwrap();
 /// // A new empty list
+/// let list_meta_data = tree.list_get_meta(b"my_list").unwrap();
 /// assert_eq!(list_meta_data.len(), 0);
-/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 0);
+/// assert_eq!(tree.list_len(b"my_list").unwrap(), 0);
 ///
 /// // pushing and popping from the front
 /// tree.list_push_front(b"my_list", b"oof").unwrap();
-/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 1);
+/// assert_eq!(tree.list_len(b"my_list").unwrap(), 1);
 /// assert_eq!(tree.list_pop_front(b"my_list").unwrap().unwrap(), b"oof");
-/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 0);
+/// assert_eq!(tree.list_len(b"my_list").unwrap(), 0);
 ///
 /// // and the back
 /// tree.list_push_back(b"my_list", b"oof").unwrap();
-/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 1);
+/// assert_eq!(tree.list_len(b"my_list").unwrap(), 1);
 /// assert_eq!(tree.list_pop_back(b"my_list").unwrap().unwrap(), b"oof");
-/// assert_eq!(tree.list_len(b"my_list").unwrap().unwrap(), 0);
+/// assert_eq!(tree.list_len(b"my_list").unwrap(), 0);
 /// ```
 pub trait ListWriteStore: ListReadStore + WriteStore {
-    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error>;
-
     fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
         IVec: From<V>;
@@ -67,7 +65,7 @@ fn update_list_meta<S, F>(store: &S, name: &[u8], mut f: F) -> Result<Option<Met
 where
     S: WriteStore,
     S::Error: From<Error>,
-    F: FnMut(Option<Meta>) -> Result<Option<Meta>, S::Error>,
+    F: FnMut(Meta) -> Option<Meta>,
 {
     let key = keys::list_meta(name);
     let mut err: Option<S::Error> = None;
@@ -76,25 +74,19 @@ where
     store.fetch_update::<IVec, _>(&key, |iv| {
         let got = if let Some(bs) = iv {
             if let Some(got) = Meta::decode(bs) {
-                Some(got)
+                got
             } else {
                 err = Some(InvalidMeta(name.to_vec()).into());
                 return Some(bs.into());
             }
         } else {
-            None
+            Meta::default()
         };
-        match f(got) {
-            Ok(m) => {
-                err = None;
-                meta = m;
-                m.map(Meta::encode).as_ref().map(IVec::from)
-            }
-            Err(e) => {
-                err = Some(e);
-                iv.map(IVec::from)
-            }
-        }
+
+        let m = f(got);
+        err = None;
+        meta = m;
+        m.map(Meta::encode).as_ref().map(IVec::from)
     })?;
 
     if let Some(e) = err {
@@ -109,22 +101,18 @@ where
     S: ReadStore,
     S::Error: From<Error>,
 {
-    fn list_get_meta(&self, name: &[u8]) -> Result<Option<Meta>, Self::Error> {
+    fn list_get_meta(&self, name: &[u8]) -> Result<Meta, Self::Error> {
         let key = keys::list_meta(name);
 
         if let Some(bs) = self.get(&key)? {
-            if let Some(got) = Meta::decode(&bs) {
-                Ok(Some(got))
-            } else {
-                Err(InvalidMeta(name.to_vec()).into())
-            }
+            Meta::decode(&bs).ok_or_else(|| InvalidMeta(name.to_vec()).into())
         } else {
-            Ok(None)
+            Ok(Meta::default())
         }
     }
 
-    fn list_len(&self, name: &[u8]) -> Result<Option<u64>, Self::Error> {
-        Ok(self.list_get_meta(name)?.as_ref().map(Meta::len))
+    fn list_len(&self, name: &[u8]) -> Result<u64, Self::Error> {
+        Ok(self.list_get_meta(name)?.len())
     }
 
     fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Self::Error> {
@@ -150,12 +138,6 @@ where
     S: WriteStore + ListReadStore,
     S::Error: From<Error>,
 {
-    fn list_create(&self, name: &[u8]) -> Result<Meta, Self::Error> {
-        update_list_meta(self, name, |om| Ok(Some(om.unwrap_or_default())))
-            .transpose()
-            .unwrap()
-    }
-
     fn list_push_front<V>(&self, name: &[u8], val: V) -> Result<(), Self::Error>
     where
         IVec: From<V>,
@@ -163,12 +145,11 @@ where
         // dummy value - will overwrite before use
         let mut ix = 0;
 
-        update_list_meta(self, name, |om| {
-            let mut meta = om.unwrap_or_default();
+        let meta = update_list_meta(self, name, |mut meta| {
             ix = meta.push_front();
-            Ok(Some(meta))
-        })?
-        .unwrap();
+            Some(meta)
+        })?;
+        debug_assert!(meta.unwrap().len() > 0);
 
         self.insert(&keys::list(name, ix), val)?;
 
@@ -182,12 +163,11 @@ where
         // dummy value - will overwrite before use
         let mut ix = 0;
 
-        update_list_meta(self, name, |om| {
-            let mut meta = om.unwrap_or_default();
+        let meta = update_list_meta(self, name, |mut meta| {
             ix = meta.push_back();
-            Ok(Some(meta))
-        })?
-        .unwrap();
+            Some(meta)
+        })?;
+        debug_assert!(meta.unwrap().len() > 0);
 
         self.insert(&keys::list(name, ix), val)?;
 
@@ -197,12 +177,15 @@ where
     fn list_pop_front(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error> {
         let mut ix: Option<ListIndex> = None;
 
-        update_list_meta(self, name, |om| {
-            let mut meta = om.unwrap_or_default();
+        let meta = update_list_meta(self, name, |mut meta| {
             ix = meta.pop_front();
-            Ok(Some(meta))
-        })?
-        .unwrap();
+            if meta.is_empty() {
+                None
+            } else {
+                Some(meta)
+            }
+        })?;
+        debug_assert!(meta.is_none() || meta.unwrap().len() > 0);
 
         Ok(if let Some(ix) = ix {
             let key = keys::list(name, ix);
@@ -221,12 +204,15 @@ where
     fn list_pop_back(&self, name: &[u8]) -> Result<Option<IVec>, Self::Error> {
         let mut ix: Option<ListIndex> = None;
 
-        update_list_meta(self, name, |om| {
-            let mut meta = om.unwrap_or_default();
+        let meta = update_list_meta(self, name, |mut meta| {
             ix = meta.pop_back();
-            Ok(Some(meta))
-        })?
-        .unwrap();
+            if meta.is_empty() {
+                None
+            } else {
+                Some(meta)
+            }
+        })?;
+        debug_assert!(meta.is_none() || meta.unwrap().len() > 0);
 
         Ok(if let Some(ix) = ix {
             let key = keys::list(name, ix);

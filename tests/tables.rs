@@ -30,12 +30,7 @@ impl Models {
     fn validate(&self) -> bool {
         self.store.len() == self.model.iter().map(|(_, kvs)| 1 + kvs.len()).sum()
             && self.model.iter().all(|(name, kvs)| {
-                self.store
-                    .table_get_meta(name)
-                    .expect("get failed")
-                    .expect("missing meta")
-                    .len()
-                    == kvs.len() as u64
+                self.store.table_get_meta(name).expect("get failed").len() == kvs.len() as u64
                     && kvs.iter().all(|(key, val)| {
                         self.store
                             .table_get(name, key)
