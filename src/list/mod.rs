@@ -58,6 +58,16 @@ pub trait ListWriteStore: ListReadStore + WriteStore {
         IVec: From<V>;
 }
 
+pub trait ListRangeStore: ListReadStore + RangeStore {
+    type ListRangeIter: DoubleEndedIterator<Item = Result<IVec, Self::Error>>;
+
+    fn list_range<R: RangeBounds<u64>>(
+        &self,
+        name: &[u8],
+        range: R,
+    ) -> Result<Option<Self::ListRangeIter>, Self::Error>;
+}
+
 /// Fetches previous metadata at `name` if it exists, returning an error if data exists but fails to parse.
 /// Applies `f`, and overwrites the metadata with the resulting list if it doesn't return an error.
 /// Returns the written `meta`.
@@ -246,6 +256,85 @@ where
         }
 
         Ok(None)
+    }
+}
+
+impl<S> ListRangeStore for S
+where
+    S: RangeStore,
+    S::Error: From<Error>,
+{
+    type ListRangeIter = Box<dyn DoubleEndedIterator<Item = Result<IVec, Self::Error>> + 'static>;
+
+    fn list_range<R: RangeBounds<u64>>(
+        &self,
+        name: &[u8],
+        range: R,
+    ) -> Result<Option<Self::ListRangeIter>, Self::Error> {
+        use std::ops::Bound;
+
+        let meta = self.list_get_meta(name)?;
+
+        let start_key;
+        let start = match range.start_bound() {
+            Bound::Included(u) => {
+                if let Some(k) = meta.mk_key(*u) {
+                    start_key = keys::list(name, k);
+                    Bound::Included(start_key.as_slice())
+                } else {
+                    return Ok(None);
+                }
+            }
+            Bound::Excluded(u) => {
+                if let Some(k) = meta.mk_key(*u) {
+                    start_key = keys::list(name, k);
+                    Bound::Excluded(start_key.as_slice())
+                } else {
+                    return Ok(None);
+                }
+            }
+            Bound::Unbounded => {
+                if let Some(k) = meta.mk_key(0) {
+                    start_key = keys::list(name, k);
+                    Bound::Included(start_key.as_slice())
+                } else {
+                    return Ok(None);
+                }
+            }
+        };
+
+        let end_key;
+        let end = match range.end_bound() {
+            Bound::Included(u) => {
+                if let Some(k) = meta.mk_key(*u) {
+                    end_key = keys::list(name, k);
+                    Bound::Included(end_key.as_slice())
+                } else {
+                    return Ok(None);
+                }
+            }
+            Bound::Excluded(u) => {
+                if let Some(k) = meta.mk_key(*u) {
+                    end_key = keys::list(name, k);
+                    Bound::Excluded(end_key.as_slice())
+                } else {
+                    return Ok(None);
+                }
+            }
+            Bound::Unbounded => {
+                if let Some(k) = meta.mk_key(meta.len() - 1) {
+                    end_key = keys::list(name, k);
+                    Bound::Included(end_key.as_slice())
+                } else {
+                    return Ok(None);
+                }
+            }
+        };
+
+        let iter = self.range((start, end)).map(|res| res.map(|t| t.1));
+        let biter = Box::new(iter);
+
+        Ok(Some(biter))
     }
 }
 

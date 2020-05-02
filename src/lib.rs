@@ -20,7 +20,7 @@ mod error;
 pub use error::*;
 
 pub trait ReadStore {
-    type Error: std::error::Error;
+    type Error: std::error::Error + 'static;
 
     fn get(&self, key: &[u8]) -> Result<Option<IVec>, Self::Error>;
 }
@@ -49,7 +49,8 @@ pub trait WriteStore: ReadStore {
 pub trait TransactionalStore: WriteStore {}
 
 pub trait RangeStore: ReadStore {
-    type Iter: DoubleEndedIterator<Item = Result<IVec, Self::Error>>;
+    type Iter: DoubleEndedIterator<Item = Result<(IVec, IVec), Self::Error>> + 'static;
+
     fn range<'a, R>(&self, range: R) -> Self::Iter
     where
         R: RangeBounds<&'a [u8]>;
@@ -81,6 +82,26 @@ impl WriteStore for sled::Tree {
         F: FnMut(Option<&[u8]>) -> Option<V>,
     {
         self.fetch_and_update(key, f).map_err(Error::Store)
+    }
+}
+
+impl RangeStore for sled::Tree {
+    type Iter = std::iter::Map<
+        sled::Iter,
+        fn(Result<(IVec, IVec), sled::Error>) -> Result<(IVec, IVec), Error<sled::Error>>,
+    >;
+
+    fn range<'a, R>(&self, range: R) -> Self::Iter
+    where
+        R: RangeBounds<&'a [u8]>,
+    {
+        fn transform_sled_iter(
+            input: Result<(IVec, IVec), sled::Error>,
+        ) -> Result<(IVec, IVec), Error<sled::Error>> {
+            input.map_err(Error::Store)
+        }
+
+        self.range::<&'a [u8], R>(range).map(transform_sled_iter)
     }
 }
 
