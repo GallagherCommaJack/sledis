@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use sled::IVec;
 use std::ops::RangeBounds;
 
@@ -18,6 +20,14 @@ pub use segment::*;
 
 mod error;
 pub use error::*;
+
+mod lock_table;
+
+pub struct Conn {
+    items: sled::Tree,
+    ttl: sled::Tree,
+    locks: lock_table::Table,
+}
 
 pub trait ReadStore {
     type Error: std::error::Error + 'static;
