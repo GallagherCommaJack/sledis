@@ -1,51 +1,41 @@
 use quickcheck::{Arbitrary, Gen};
 
 use quickcheck_macros::*;
-use sled::{Config, Tree};
-use sledis::*;
 use std::collections::BTreeMap;
 
-fn set_up_table_store() -> Tree {
-    Config::default()
-        .cache_capacity(100_000)
-        .temporary(true)
-        .open()
-        .unwrap()
-        .open_tree("tree")
-        .unwrap()
-}
+mod common;
+use common::TempDb;
 
 struct Models {
-    store: Tree,
+    store: TempDb,
     model: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl Models {
     fn new() -> Self {
-        let store = set_up_table_store();
+        let store = TempDb::new().expect("failed to create temp db");
         let model = BTreeMap::new();
         Self { store, model }
     }
 
     fn validate(&self) -> bool {
-        self.store.len() == self.model.iter().map(|(_, kvs)| 1 + kvs.len()).sum()
-            && self.model.iter().all(|(name, kvs)| {
-                self.store.table_get_meta(name).expect("get failed").len() == kvs.len() as u64
-                    && kvs.iter().all(|(key, val)| {
-                        self.store
-                            .table_get(name, key)
-                            .expect("get failed")
-                            .expect("missing val")
-                            .as_ref()
-                            == val.as_slice()
-                    })
-            })
+        self.model.iter().all(|(name, kvs)| {
+            self.store.table_get_meta(name).expect("get failed").len() == kvs.len() as u64
+                && kvs.iter().all(|(key, val)| {
+                    self.store
+                        .table_get(name, key)
+                        .expect("get failed")
+                        .expect("missing val")
+                        .as_ref()
+                        == val.as_slice()
+                })
+        })
     }
 
     fn insert(&mut self, name: Vec<u8>, key: Vec<u8>, val: Vec<u8>) {
         let in_tree = self
             .store
-            .table_insert(&name, &key, val.clone())
+            .table_insert(&name, &key, val.as_slice().into())
             .expect("failed to add");
         let in_model = self.model.entry(name).or_default().insert(key, val);
         assert_eq!(

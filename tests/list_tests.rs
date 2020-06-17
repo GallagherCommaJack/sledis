@@ -1,18 +1,10 @@
 use quickcheck::{Arbitrary, Gen};
 use quickcheck_macros::*;
-use sled::{Config, Tree};
 use sledis::*;
 use std::collections::VecDeque;
 
-fn set_up_list_store() -> Tree {
-    Config::default()
-        .cache_capacity(100_000)
-        .temporary(true)
-        .open()
-        .unwrap()
-        .open_tree("tree")
-        .unwrap()
-}
+mod common;
+use common::TempDb;
 
 #[derive(Debug, Clone)]
 enum DequeuOp {
@@ -35,11 +27,7 @@ impl Arbitrary for DequeuOp {
 }
 
 // assert a list and a dequeue have the same contents
-fn deep_eq<S: ListReadStore, T: AsRef<[u8]> + std::fmt::Debug>(
-    store: &S,
-    name: &[u8],
-    deque: &VecDeque<T>,
-) -> bool {
+fn deep_eq(store: &Conn, name: &[u8], deque: &VecDeque<Vec<u8>>) -> bool {
     let len = store.list_len(name).expect("store error");
 
     (0..len).all(|idx| {
@@ -65,7 +53,7 @@ fn pop_eq(deq_ret: Option<Vec<u8>>, sled_ret: Option<sled::IVec>) -> bool {
 // test API identicallity to std::collections::VecDeque.
 fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> bool {
     // init list store
-    let store = set_up_list_store();
+    let store = TempDb::new().expect("failed to create temporary db");
 
     // init dequeue
     let mut dequeue = VecDeque::new();
@@ -73,12 +61,12 @@ fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> b
     let ops_corr = ops.iter().all(|op| match op {
         DequeuOp::PushFront(val) => {
             dequeue.push_front(val.clone());
-            store.list_push_front(name, val.clone()).unwrap();
+            store.list_push_front(name, val.as_slice().into()).unwrap();
             true
         }
         DequeuOp::PushBack(val) => {
             dequeue.push_back(val.clone());
-            store.list_push_back(name, val.clone()).unwrap();
+            store.list_push_back(name, val.as_slice().into()).unwrap();
             true
         }
         DequeuOp::PopFront => {
@@ -103,7 +91,7 @@ fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> b
 fn chaos_test_list_no_name(ops: Vec<DequeuOp>) -> bool {
     // init list store
     let name = b"chaos_test_no_name";
-    let store = set_up_list_store();
+    let store = TempDb::new().expect("failed to create temporary db");
 
     // init dequeue
     let mut dequeue = VecDeque::new();
@@ -111,12 +99,12 @@ fn chaos_test_list_no_name(ops: Vec<DequeuOp>) -> bool {
     let ops_corr = ops.iter().all(|op| match op {
         DequeuOp::PushFront(val) => {
             dequeue.push_front(val.clone());
-            store.list_push_front(name, val.clone()).unwrap();
+            store.list_push_front(name, val.as_slice().into()).unwrap();
             true
         }
         DequeuOp::PushBack(val) => {
             dequeue.push_back(val.clone());
-            store.list_push_back(name, val.clone()).unwrap();
+            store.list_push_back(name, val.as_slice().into()).unwrap();
             true
         }
         DequeuOp::PopFront => {

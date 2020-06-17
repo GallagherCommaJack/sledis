@@ -6,6 +6,7 @@ use std::{
     sync::{atomic::*, Arc},
 };
 
+#[derive(Default)]
 pub struct Table {
     inner: DashMap<sled::IVec, LockEntryInner>,
 }

@@ -1,11 +1,11 @@
 use thiserror::*;
 
 #[derive(Error, Debug)]
-pub enum Error<E: std::error::Error> {
+pub enum Error {
     #[error(transparent)]
-    List(#[from] crate::list::Error),
+    List(#[from] crate::list::ListError),
     #[error(transparent)]
-    Table(#[from] crate::table::Error),
+    Table(#[from] crate::table::TableError),
     #[error("store error: {0}")]
-    Store(E),
+    Store(#[from] sled::Error),
 }
