@@ -58,4 +58,8 @@ impl Conn {
     pub fn blob_set(&self, name: &[u8], val: IVec) -> Result<Option<IVec>, sled::Error> {
         self.items.insert(&keys::blob(name), val)
     }
+
+    pub fn blob_remove(&self, name: &[u8]) -> Result<Option<IVec>, sled::Error> {
+        self.items.get(&keys::blob(name))
+    }
 }
