@@ -1,5 +1,4 @@
 use super::*;
-use std::sync::Arc;
 use thiserror::*;
 
 mod meta;
@@ -31,7 +30,7 @@ impl Conn {
         let key = IVec::from(keys::table(name, key));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.write();
+        let _guard = mutex.write();
 
         let old = self.items.get(&key)?;
         let mut meta = self.table_get_meta(name)?;

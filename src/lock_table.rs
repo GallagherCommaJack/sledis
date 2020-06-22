@@ -1,10 +1,7 @@
 use dashmap::DashMap;
 use parking_lot::RwLock;
 
-use std::{
-    ops::{Deref, DerefMut},
-    sync::{atomic::*, Arc},
-};
+use std::{ops::Deref, sync::atomic::*};
 
 #[derive(Default)]
 pub struct Table {

@@ -1,10 +1,5 @@
-#![allow(warnings)]
-
 use sled::IVec;
-use std::{
-    ops::RangeBounds,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 pub mod escaping;
 use escaping::*;
@@ -25,10 +20,10 @@ pub use error::*;
 mod lock_table;
 
 pub struct Conn {
-    db: sled::Db,
-    items: sled::Tree,
-    ttl: sled::Tree,
-    locks: lock_table::Table,
+    pub db: sled::Db,
+    pub items: sled::Tree,
+    pub ttl: sled::Tree,
+    pub locks: lock_table::Table,
 }
 
 impl Conn {

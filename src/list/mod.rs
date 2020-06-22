@@ -24,7 +24,7 @@ impl Conn {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.read();
+        let _guard = mutex.read();
 
         let meta = self.list_get_meta(name)?;
 
@@ -39,7 +39,7 @@ impl Conn {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.write();
+        let _guard = mutex.write();
 
         let mut meta = self.list_get_meta(name)?;
         let ix = meta.push_front();
@@ -57,7 +57,7 @@ impl Conn {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.write();
+        let _guard = mutex.write();
 
         let mut meta = self.list_get_meta(name)?;
         let ix = meta.push_back();
@@ -75,7 +75,7 @@ impl Conn {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.write();
+        let _guard = mutex.write();
 
         let mut meta = self.list_get_meta(name)?;
         if let Some(ix) = meta.pop_front() {
@@ -98,7 +98,7 @@ impl Conn {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.write();
+        let _guard = mutex.write();
 
         let mut meta = self.list_get_meta(name)?;
         if let Some(ix) = meta.pop_back() {
@@ -121,7 +121,7 @@ impl Conn {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
-        let guard = mutex.read();
+        let _guard = mutex.read();
 
         let meta = self.list_get_meta(name)?;
 
