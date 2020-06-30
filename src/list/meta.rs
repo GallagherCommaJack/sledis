@@ -32,9 +32,11 @@ impl Meta {
         }
     }
 
-    pub fn mk_key(&self, ix: u64) -> Option<ListIndex> {
-        if ix < self.len {
-            Some(self.head + ix as ListIndex)
+    pub fn mk_key(&self, ix: i64) -> Option<ListIndex> {
+        let offset = ix.rem_euclid(self.len as i64);
+        let valid_ix = ix <= offset; // ix <= offset <-> (ix < 0 /\ ix.abs() <= self.len) \/ (ix > 0 /\ ix < self.len)
+        if valid_ix {
+            Some(self.head + offset as ListIndex)
         } else {
             None
         }

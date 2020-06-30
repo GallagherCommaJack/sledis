@@ -20,7 +20,7 @@ impl Conn {
         Ok(self.list_get_meta(name)?.len())
     }
 
-    pub fn list_get(&self, name: &[u8], ix: u64) -> Result<Option<IVec>, Error> {
+    pub fn list_get(&self, name: &[u8], ix: i64) -> Result<Option<IVec>, Error> {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);
@@ -117,7 +117,7 @@ impl Conn {
         }
     }
 
-    pub fn list_set(&self, name: &[u8], ix: u64, val: IVec) -> Result<Option<IVec>, Error> {
+    pub fn list_set(&self, name: &[u8], ix: i64, val: IVec) -> Result<Option<IVec>, Error> {
         let meta_key = IVec::from(keys::list_meta(name));
 
         let mutex = self.locks.lock(&meta_key);

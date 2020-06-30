@@ -28,14 +28,14 @@ impl Arbitrary for DequeuOp {
 
 // assert a list and a dequeue have the same contents
 fn deep_eq(store: &Conn, name: &[u8], deque: &VecDeque<Vec<u8>>) -> bool {
-    let len = store.list_len(name).expect("store error");
+    let len = store.list_len(name).expect("store error") as i64;
 
-    (0..len).all(|idx| {
+    (-len..len).all(|idx| {
         store
             .list_get(name, idx)
             .expect("store error")
             .expect("element not found")
-            == deque[idx as usize]
+            == deque[idx.rem_euclid(len) as usize]
     })
 }
 
