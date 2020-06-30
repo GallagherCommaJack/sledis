@@ -1,13 +1,18 @@
+use sledis::*;
+
 pub struct TempDb {
     conn: sledis::Conn,
     _dir: tempfile::TempDir,
 }
 
 impl TempDb {
-    pub fn new() -> Result<Self, sled::Error> {
-        let _dir = tempfile::tempdir()?;
-        let conn = sledis::Conn::open(_dir.path())?;
-        Ok(TempDb { _dir, conn })
+    pub fn new() -> Self {
+        let _dir = tempfile::tempdir().expect("failed to create temporary dir");
+        let conn = sled::Config::default()
+            .path(_dir.path())
+            .open_sledis()
+            .expect("failed to create temp db");
+        TempDb { conn, _dir }
     }
 }
 

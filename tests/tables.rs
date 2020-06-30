@@ -13,7 +13,7 @@ struct Models {
 
 impl Models {
     fn new() -> Self {
-        let store = TempDb::new().expect("failed to create temp db");
+        let store = TempDb::new();
         let model = BTreeMap::new();
         Self { store, model }
     }

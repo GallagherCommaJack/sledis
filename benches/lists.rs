@@ -1,5 +1,9 @@
 use criterion::*;
+use sledis::*;
 use std::time::Instant;
+
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub struct TempDb {
     conn: sledis::Conn,
@@ -9,7 +13,12 @@ pub struct TempDb {
 impl Default for TempDb {
     fn default() -> Self {
         let _dir = tempfile::tempdir().expect("failed to create tempdir");
-        let conn = sledis::Conn::open(_dir.path()).expect("failed to open db");
+        let conn = sled::Config::default()
+            .path(_dir.path())
+            .cache_capacity(4 << 30)
+            // .mode(sled::Mode::HighThroughput)
+            .open_sledis()
+            .expect("failed to open db");
         TempDb { _dir, conn }
     }
 }
@@ -27,11 +36,11 @@ impl std::ops::DerefMut for TempDb {
         &mut self.conn
     }
 }
-const KEY_SIZES: &[usize] = &[2048];
-const VAL_SIZES: &[usize] = &[2048];
+const KEY_SIZES: &[usize] = &[8];
+const VAL_SIZES: &[usize] = &[8];
 
-// const KEY_SIZES: &[usize] = &[8, 32, 128, 512, 2048];
-// const VAL_SIZES: &[usize] = &[8, 32, 128, 512, 2048];
+// const KEY_SIZES: &[usize] = &[8, 32, 128, 512];
+// const VAL_SIZES: &[usize] = &[8, 32, 128, 512];
 
 fn serial_ops(c: &mut Criterion) {
     for key_size in KEY_SIZES {

@@ -53,7 +53,7 @@ fn pop_eq(deq_ret: Option<Vec<u8>>, sled_ret: Option<sled::IVec>) -> bool {
 // test API identicallity to std::collections::VecDeque.
 fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> bool {
     // init list store
-    let store = TempDb::new().expect("failed to create temporary db");
+    let store = TempDb::new();
 
     // init dequeue
     let mut dequeue = VecDeque::new();
@@ -91,7 +91,7 @@ fn chaos_test_list_with_name((ref name, ref ops): (Vec<u8>, Vec<DequeuOp>)) -> b
 fn chaos_test_list_no_name(ops: Vec<DequeuOp>) -> bool {
     // init list store
     let name = b"chaos_test_no_name";
-    let store = TempDb::new().expect("failed to create temporary db");
+    let store = TempDb::new();
 
     // init dequeue
     let mut dequeue = VecDeque::new();
