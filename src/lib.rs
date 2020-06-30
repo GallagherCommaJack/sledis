@@ -19,6 +19,16 @@ pub use error::*;
 
 mod lock_table;
 
+pub trait ConfigExt {
+    fn open_sledis(&self) -> Result<Conn, sled::Error>;
+}
+
+impl ConfigExt for sled::Config {
+    fn open_sledis(&self) -> Result<Conn, sled::Error> {
+        Conn::with_config(self)
+    }
+}
+
 pub struct Conn {
     pub db: sled::Db,
     pub items: sled::Tree,
@@ -28,7 +38,11 @@ pub struct Conn {
 
 impl Conn {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, sled::Error> {
-        let db = sled::open(path)?;
+        sled::Config::default().path(path).open_sledis()
+    }
+
+    pub fn with_config(c: &sled::Config) -> Result<Self, sled::Error> {
+        let db = c.open()?;
         let items = db.open_tree("items")?;
         let ttl = db.open_tree("ttl")?;
         let locks = lock_table::Table::default();
