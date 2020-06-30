@@ -69,7 +69,7 @@ impl EscapedVec {
 pub fn is_escaped(input: &[u8]) -> bool {
     let mut nulls_escaped = true;
 
-    for byte in input.as_ref() {
+    for byte in input {
         if !nulls_escaped {
             if *byte == ESCAPE_CHAR {
                 nulls_escaped = true
@@ -85,7 +85,7 @@ pub fn is_escaped(input: &[u8]) -> bool {
 }
 
 pub fn escaped_size(input: &[u8]) -> usize {
-    let count_nulls = input.iter().filter(|byte| **byte == NULL).count();
+    let count_nulls = bytecount::count(input, NULL);
     input.len() + count_nulls
 }
 

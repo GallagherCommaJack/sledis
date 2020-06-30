@@ -26,4 +26,8 @@ impl Meta {
     pub fn len(&self) -> u64 {
         self.len
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 }

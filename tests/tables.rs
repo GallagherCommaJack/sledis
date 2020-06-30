@@ -160,8 +160,8 @@ mod one_table {
                         .shrink()
                         .map(|(k, v)| TableOp::Insert(k, v)),
                 ),
-                TableOp::Remove(key) => Box::new(key.clone().shrink().map(|k| TableOp::Remove(k))),
-                TableOp::Get(key) => Box::new(key.clone().shrink().map(|k| TableOp::Get(k))),
+                TableOp::Remove(key) => Box::new(key.clone().shrink().map(TableOp::Remove)),
+                TableOp::Get(key) => Box::new(key.clone().shrink().map(TableOp::Get)),
             }
         }
     }

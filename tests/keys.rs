@@ -30,7 +30,7 @@ impl Arbitrary for OwnedKey {
         match self {
             Blob(name) => Box::new(name.shrink().map(Blob)),
             List(name, ix) => Box::new(
-                (name.clone(), ix.clone())
+                (name.clone(), *ix)
                     .shrink()
                     .map(|(name, ix)| List(name, ix)),
             ),
