@@ -36,11 +36,8 @@ impl std::ops::DerefMut for TempDb {
         &mut self.conn
     }
 }
-const KEY_SIZES: &[usize] = &[8];
-const VAL_SIZES: &[usize] = &[8];
-
-// const KEY_SIZES: &[usize] = &[8, 32, 128, 512];
-// const VAL_SIZES: &[usize] = &[8, 32, 128, 512];
+const KEY_SIZES: &[usize] = &[8, 32];
+const VAL_SIZES: &[usize] = &[8, 512];
 
 fn serial_ops(c: &mut Criterion) {
     for key_size in KEY_SIZES {
