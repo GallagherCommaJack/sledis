@@ -1,5 +1,5 @@
 use sled::IVec;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 pub mod escaping;
 use escaping::*;
@@ -27,11 +27,12 @@ impl ConfigExt for sled::Config {
     }
 }
 
+#[derive(Clone)]
 pub struct Conn {
     pub db: sled::Db,
     pub items: sled::Tree,
     pub ttl: sled::Tree,
-    pub locks: lock_table::Table,
+    pub locks: Arc<lock_table::Table>,
 }
 
 impl Conn {
@@ -43,7 +44,7 @@ impl Conn {
         let db = c.open()?;
         let items = db.open_tree("items")?;
         let ttl = db.open_tree("ttl")?;
-        let locks = lock_table::Table::default();
+        let locks = Arc::new(lock_table::Table::default());
         Ok(Conn {
             db,
             items,
@@ -94,14 +95,31 @@ impl Conn {
         let key = keys::bare(key).into();
         let lock = self.locks.lock(&key);
         let _guard = lock.write();
-        let mut batch = sled::Batch::default();
-        let old_rec = self.raw_remove_item(&key, &mut batch)?;
-        self.items.apply_batch(batch.clone())?;
-        // note: this isn't atomic bc sled transactions aren't very concurrent
-        // shouldn't be /too/ bad though, since the ttl tree will never be that large,
-        // so potentially leaking here isn't too bad
-        self.ttl.apply_batch(batch)?;
 
-        Ok(old_rec)
+        if cfg!(feature = "safe") {
+            let mut batch = sled::Batch::default();
+            let old_rec = self.raw_remove_item(&key, &mut batch)?;
+            self.items.apply_batch(batch.clone())?;
+            // note: this isn't atomic bc sled transactions aren't very concurrent
+            // shouldn't be /too/ bad though, since the ttl tree will never be that large,
+            // so potentially leaking here isn't too bad
+            self.ttl.apply_batch(batch)?;
+            Ok(old_rec)
+        } else {
+            let old_rec = self.items.remove(&key)?.map(Record::decode).transpose()?;
+
+            match old_rec.as_ref().map(Record::tag) {
+                None | Some(Tag::Blob) => {}
+                Some(Tag::List) | Some(Tag::Table) => {
+                    for entry in self.items.scan_prefix(&key) {
+                        let (key, _) = entry?;
+                        self.items.remove(&key)?;
+                        self.ttl.remove(&key)?;
+                    }
+                }
+            }
+
+            Ok(old_rec)
+        }
     }
 }

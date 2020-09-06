@@ -18,41 +18,33 @@ impl Conn {
         let lock = self.locks.lock(&key);
         let _guard = lock.write();
 
-        let mut batch = sled::Batch::default();
-        let old_record = self.raw_remove_item(&key, &mut batch)?;
+        let old_record = if cfg!(feature = "safe") {
+            let mut batch = sled::Batch::default();
+            let old_record = self.raw_remove_item(&key, &mut batch)?;
 
-        let ttl_batch = batch.clone();
-        batch.insert(&key, Record::FromData(Tag::Blob, val).into_raw());
+            let ttl_batch = batch.clone();
+            batch.insert(&key, Record::FromData(Tag::Blob, val).into_raw());
 
-        self.items.apply_batch(batch)?;
-        self.ttl.apply_batch(ttl_batch)?;
+            self.items.apply_batch(batch)?;
+            self.ttl.apply_batch(ttl_batch)?;
+            old_record
+        } else {
+            let old_rec = self.get_record(&key)?;
+
+            match old_rec.as_ref().map(Record::tag) {
+                None | Some(Tag::Blob) => {}
+                Some(Tag::List) | Some(Tag::Table) => {
+                    for entry in self.items.scan_prefix(&key) {
+                        let (key, _) = entry?;
+                        self.items.remove(&key)?;
+                        self.ttl.remove(&key)?;
+                    }
+                }
+            }
+
+            old_rec
+        };
 
         Ok(old_record)
-    }
-
-    pub fn blob_remove(&self, name: &[u8]) -> Result<Option<IVec>, Error> {
-        let key = keys::blob(name);
-
-        let old_ivec = self.items.fetch_and_update(key, |val| {
-            let iv = IVec::from(val?);
-            if Record::decode(iv.clone())
-                .iter()
-                .any(|rec| rec.tag() == Tag::Blob)
-            {
-                None
-            } else {
-                Some(iv)
-            }
-        })?;
-
-        let old_record = old_ivec.map(Record::decode).transpose()?;
-
-        let old_data = old_record
-            .iter()
-            .filter(|rec| rec.tag() == Tag::Blob)
-            .map(Record::data)
-            .next();
-
-        Ok(old_data)
     }
 }

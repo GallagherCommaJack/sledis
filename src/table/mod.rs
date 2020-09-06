@@ -65,22 +65,38 @@ impl Conn {
             _ => {}
         }
 
-        let mut batch = Batch::default();
+        if cfg!(feature = "safe") {
+            let mut batch = Batch::default();
 
-        if meta.len() > 0 {
-            batch.insert(&meta_key, meta.encode().into_raw());
+            if meta.len() > 0 {
+                batch.insert(&meta_key, meta.encode().into_raw());
+            } else {
+                debug_assert!(new.is_none());
+                batch.remove(&meta_key)
+            }
+
+            if let Some(iv) = new {
+                batch.insert(&key, Record::FromData(Tag::Table, iv).into_raw());
+            } else {
+                batch.remove(&key);
+            }
+
+            self.items.apply_batch(batch)?;
         } else {
-            debug_assert!(new.is_none());
-            batch.remove(&meta_key)
-        }
+            if meta.len() > 0 {
+                self.items.insert(&meta_key, meta.encode().into_raw())?;
+            } else {
+                debug_assert!(new.is_none());
+                self.items.remove(&meta_key)?;
+            }
 
-        if let Some(iv) = new {
-            batch.insert(&key, Record::FromData(Tag::Table, iv).into_raw());
-        } else {
-            batch.remove(&key);
+            if let Some(iv) = new {
+                self.items
+                    .insert(&key, Record::FromData(Tag::Table, iv).into_raw())?;
+            } else {
+                self.items.remove(&key)?;
+            }
         }
-
-        self.items.apply_batch(batch)?;
 
         Ok(old)
     }

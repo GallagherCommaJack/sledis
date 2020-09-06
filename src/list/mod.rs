@@ -53,10 +53,16 @@ impl Conn {
         let ix = meta.push_front();
         let item_key = IVec::from(keys::list(name, ix));
 
-        let mut batch = sled::Batch::default();
-        batch.insert(&item_key, Record::FromData(Tag::List, val).into_raw());
-        batch.insert(&meta_key, meta.encode().into_raw());
-        self.items.apply_batch(batch)?;
+        if cfg!(feature = "safe") {
+            let mut batch = sled::Batch::default();
+            batch.insert(&item_key, Record::FromData(Tag::List, val).into_raw());
+            batch.insert(&meta_key, meta.encode().into_raw());
+            self.items.apply_batch(batch)?;
+        } else {
+            self.items
+                .insert(&item_key, Record::FromData(Tag::List, val).into_raw())?;
+            self.items.insert(&meta_key, meta.encode().into_raw())?;
+        }
 
         Ok(())
     }
@@ -71,10 +77,16 @@ impl Conn {
         let ix = meta.push_back();
         let item_key = IVec::from(keys::list(name, ix));
 
-        let mut batch = sled::Batch::default();
-        batch.insert(&item_key, Record::FromData(Tag::List, val).into_raw());
-        batch.insert(&meta_key, meta.encode().into_raw());
-        self.items.apply_batch(batch)?;
+        if cfg!(feature = "safe") {
+            let mut batch = sled::Batch::default();
+            batch.insert(&item_key, Record::FromData(Tag::List, val).into_raw());
+            batch.insert(&meta_key, meta.encode().into_raw());
+            self.items.apply_batch(batch)?;
+        } else {
+            self.items
+                .insert(&item_key, Record::FromData(Tag::List, val).into_raw())?;
+            self.items.insert(&meta_key, meta.encode().into_raw())?;
+        }
 
         Ok(())
     }
@@ -99,16 +111,26 @@ impl Conn {
                 })
                 .transpose()?;
 
-            let mut batch = sled::Batch::default();
-            batch.remove(item_key);
+            if cfg!(feature = "safe") {
+                let mut batch = sled::Batch::default();
 
-            if meta.len() > 0 {
-                batch.insert(&meta_key, &meta.encode().into_raw());
+                batch.remove(item_key);
+
+                if meta.len() > 0 {
+                    batch.insert(&meta_key, &meta.encode().into_raw());
+                } else {
+                    batch.remove(&meta_key)
+                }
+
+                self.items.apply_batch(batch)?;
             } else {
-                batch.remove(&meta_key)
+                self.items.remove(item_key)?;
+                if meta.len() > 0 {
+                    self.items.insert(&meta_key, &meta.encode().into_raw())?;
+                } else {
+                    self.items.remove(&meta_key)?;
+                }
             }
-
-            self.items.apply_batch(batch)?;
 
             Ok(old)
         } else {
@@ -136,17 +158,26 @@ impl Conn {
                 })
                 .transpose()?;
 
-            let mut batch = sled::Batch::default();
+            if cfg!(feature = "safe") {
+                let mut batch = sled::Batch::default();
 
-            batch.remove(item_key);
+                batch.remove(item_key);
 
-            if meta.len() > 0 {
-                batch.insert(&meta_key, &meta.encode().into_raw());
+                if meta.len() > 0 {
+                    batch.insert(&meta_key, &meta.encode().into_raw());
+                } else {
+                    batch.remove(&meta_key)
+                }
+
+                self.items.apply_batch(batch)?;
             } else {
-                batch.remove(&meta_key)
+                self.items.remove(item_key)?;
+                if meta.len() > 0 {
+                    self.items.insert(&meta_key, &meta.encode().into_raw())?;
+                } else {
+                    self.items.remove(&meta_key)?;
+                }
             }
-
-            self.items.apply_batch(batch)?;
 
             Ok(old)
         } else {
@@ -161,11 +192,12 @@ impl Conn {
         let _guard = mutex.read();
 
         let meta = self.list_get_meta(name)?;
+        let iv = Record::FromData(Tag::List, val).into_raw();
 
         if let Some(ix) = meta.mk_key(ix) {
             Ok(self
                 .items
-                .fetch_and_update(keys::list(name, ix), move |_| Some(val.clone()))?)
+                .fetch_and_update(keys::list(name, ix), move |_| Some(iv.clone()))?)
         } else {
             Ok(None)
         }
