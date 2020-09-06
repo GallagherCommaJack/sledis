@@ -10,7 +10,7 @@ pub const TERMINATOR: [u8; 2] = [NULL, TERMINATE_CHAR];
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Copy)]
 pub struct NotEscaped;
 
-pub type EscapedVecInner = Segment;
+pub type EscapedVecInner = IVec;
 
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct EscapedVec(pub(crate) EscapedVecInner);
@@ -65,7 +65,7 @@ impl EscapedVec {
         EscapedArr(self.0.as_ref())
     }
 
-    pub fn into_segment(self) -> Segment {
+    pub fn into_segment(self) -> IVec {
         self.0
     }
 }
@@ -97,7 +97,7 @@ pub fn escape_with_size_hint(input: &[u8], hint: usize) -> EscapedVec {
 
     escape_into(input, &mut out);
 
-    EscapedVec(Segment::new(out.into()))
+    EscapedVec(out.into())
 }
 
 pub fn escape_into(input: &[u8], out: &mut Vec<u8>) {
@@ -126,7 +126,7 @@ impl<'a> TryFrom<&'a [u8]> for EscapedArr<'a> {
 
 impl<'a> EscapedArr<'a> {
     pub fn to_vec(self) -> EscapedVec {
-        EscapedVec(Segment::new(self.0.into()))
+        EscapedVec(self.0.into())
     }
 }
 

@@ -12,12 +12,10 @@ pub mod table;
 mod error;
 mod lock_table;
 pub mod record;
-mod segment;
 
 pub use error::*;
 pub use keys::*;
 use record::*;
-pub use segment::*;
 
 pub trait ConfigExt {
     fn open_sledis(&self) -> Result<Conn, sled::Error>;
