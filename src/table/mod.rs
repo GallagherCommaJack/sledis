@@ -1,4 +1,5 @@
 use super::*;
+use sled::{Batch, IVec};
 use thiserror::*;
 
 mod meta;
@@ -8,15 +9,23 @@ impl Conn {
     pub fn table_get_meta(&self, name: &[u8]) -> Result<Meta, Error> {
         let key = keys::table_meta(name);
 
-        if let Some(bs) = self.items.get(&key)? {
-            Meta::decode(Segment::new(bs)).ok_or_else(|| InvalidMeta(name.to_vec()).into())
+        if let Some(bs) = self.get_record(&key)? {
+            Meta::decode(&bs)
         } else {
             Ok(Meta::default())
         }
     }
 
     pub fn table_get(&self, name: &[u8], key: &[u8]) -> Result<Option<IVec>, Error> {
-        Ok(self.items.get(&keys::table(name, key))?)
+        self.get_record(&keys::table(name, key))?
+            .map(|rec| {
+                if rec.tag() != Tag::Table {
+                    Err(Error::BadType(Tag::Table, rec.tag()))
+                } else {
+                    Ok(rec.data())
+                }
+            })
+            .transpose()
     }
 
     #[inline]
@@ -32,8 +41,17 @@ impl Conn {
         let mutex = self.locks.lock(&meta_key);
         let _guard = mutex.write();
 
-        let old = self.items.get(&key)?;
         let mut meta = self.table_get_meta(name)?;
+        let old = self
+            .get_record(&key)?
+            .map(|rec| {
+                if rec.tag() != Tag::Table {
+                    Err(Error::BadType(Tag::Table, rec.tag()))
+                } else {
+                    Ok(rec.data())
+                }
+            })
+            .transpose()?;
 
         let new = f(&meta, &old);
 
@@ -47,13 +65,21 @@ impl Conn {
             _ => {}
         }
 
-        let mut batch = sled::Batch::default();
-        batch.insert(&meta_key, meta.encode());
+        let mut batch = Batch::default();
+
+        if meta.len() > 0 {
+            batch.insert(&meta_key, meta.encode().into_raw());
+        } else {
+            debug_assert!(new.is_none());
+            batch.remove(&meta_key)
+        }
+
         if let Some(iv) = new {
-            batch.insert(&key, iv);
+            batch.insert(&key, Record::FromData(Tag::Table, iv).into_raw());
         } else {
             batch.remove(&key);
         }
+
         self.items.apply_batch(batch)?;
 
         Ok(old)
@@ -71,7 +97,5 @@ impl Conn {
 #[derive(Error, Debug)]
 pub enum TableError {
     #[error("invalid table metadata, key was: {0:#?}")]
-    InvalidMeta(Vec<u8>),
+    InvalidMeta(IVec),
 }
-
-use self::TableError::*;

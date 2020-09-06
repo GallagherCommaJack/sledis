@@ -64,6 +64,10 @@ impl EscapedVec {
     pub fn as_arr(&self) -> EscapedArr {
         EscapedArr(self.0.as_ref())
     }
+
+    pub fn into_segment(self) -> Segment {
+        self.0
+    }
 }
 
 pub fn is_escaped(input: &[u8]) -> bool {
@@ -82,15 +86,6 @@ pub fn is_escaped(input: &[u8]) -> bool {
     }
 
     nulls_escaped
-}
-
-pub fn escaped_size(input: &[u8]) -> usize {
-    let count_nulls = bytecount::count(input, NULL);
-    input.len() + count_nulls
-}
-
-pub fn escape(input: &[u8]) -> EscapedVec {
-    escape_with_size_hint(input, escaped_size(input))
 }
 
 pub fn escape_optimistic(input: &[u8]) -> EscapedVec {

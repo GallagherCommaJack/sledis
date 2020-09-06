@@ -4,20 +4,20 @@ use std::path::Path;
 pub mod escaping;
 use escaping::*;
 
+pub mod blob;
 pub mod keys;
-pub use keys::*;
-
 pub mod list;
-
 pub mod table;
 
-mod segment;
-pub use segment::*;
-
 mod error;
-pub use error::*;
-
 mod lock_table;
+pub mod record;
+mod segment;
+
+pub use error::*;
+pub use keys::*;
+use record::*;
+pub use segment::*;
 
 pub trait ConfigExt {
     fn open_sledis(&self) -> Result<Conn, sled::Error>;
@@ -60,22 +60,50 @@ impl Conn {
         Ok(())
     }
 
-    pub fn blob_get(&self, name: &[u8]) -> Result<Option<IVec>, sled::Error> {
-        self.items.get(&keys::blob(name))
-    }
-
-    pub fn blob_set(&self, name: &[u8], val: IVec) -> Result<Option<IVec>, sled::Error> {
-        self.items.insert(&keys::blob(name), val)
-    }
-
-    pub fn blob_remove(&self, name: &[u8]) -> Result<Option<IVec>, sled::Error> {
-        self.items.get(&keys::blob(name))
-    }
-
     pub fn flush(&self) -> Result<(), sled::Error> {
         self.items.flush()?;
         self.ttl.flush()?;
         self.db.flush()?;
         Ok(())
+    }
+
+    pub(crate) fn get_record(&self, key: &[u8]) -> Result<Option<Record>, Error> {
+        let res = self.items.get(key)?;
+        Ok(res.map(Record::decode).transpose()?)
+    }
+
+    pub(crate) fn raw_remove_item(
+        &self,
+        raw_key: &[u8],
+        batch: &mut sled::Batch,
+    ) -> Result<Option<Record>, Error> {
+        let old_rec = self.get_record(raw_key)?;
+
+        match old_rec.as_ref().map(Record::tag) {
+            None | Some(Tag::Blob) => {}
+            Some(Tag::List) | Some(Tag::Table) => {
+                for entry in self.items.scan_prefix(raw_key) {
+                    let (key, _) = entry?;
+                    batch.remove(key)
+                }
+            }
+        }
+
+        Ok(old_rec)
+    }
+
+    pub fn remove_item(&self, key: &[u8]) -> Result<Option<Record>, Error> {
+        let key = keys::bare(key).into();
+        let lock = self.locks.lock(&key);
+        let _guard = lock.write();
+        let mut batch = sled::Batch::default();
+        let old_rec = self.raw_remove_item(&key, &mut batch)?;
+        self.items.apply_batch(batch.clone())?;
+        // note: this isn't atomic bc sled transactions aren't very concurrent
+        // shouldn't be /too/ bad though, since the ttl tree will never be that large,
+        // so potentially leaking here isn't too bad
+        self.ttl.apply_batch(batch)?;
+
+        Ok(old_rec)
     }
 }

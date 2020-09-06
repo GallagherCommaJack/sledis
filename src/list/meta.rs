@@ -10,22 +10,25 @@ pub struct Meta {
 pub const META_SIZE: usize = INDEX_BYTES + 8;
 
 impl Meta {
-    pub fn encode(self) -> [u8; META_SIZE] {
+    pub fn encode(self) -> Record {
         let mut out = [0u8; META_SIZE];
         out[..INDEX_BYTES].copy_from_slice(&self.head.to_be_bytes());
         out[INDEX_BYTES..].copy_from_slice(&self.len.to_be_bytes());
-        out
+
+        Record::FromData(Tag::List, (&out).into())
     }
 
-    pub fn decode(inp: &[u8]) -> Option<Self> {
-        if inp.len() < META_SIZE {
-            None
+    pub fn decode(inp: &Record) -> Result<Self, Error> {
+        if inp.tag() != Tag::List {
+            Err(Error::BadType(Tag::Table, inp.tag()))?
+        } else if inp.len() != META_SIZE {
+            Err(ListError::InvalidMeta(inp.data()))?
         } else {
             let mut head_buf = [0u8; INDEX_BYTES];
             head_buf.copy_from_slice(&inp[..INDEX_BYTES]);
             let mut len_buf = [0u8; 8];
             len_buf.copy_from_slice(&inp[INDEX_BYTES..]);
-            Some(Self {
+            Ok(Self {
                 head: ListIndex::from_be_bytes(head_buf),
                 len: u64::from_be_bytes(len_buf),
             })

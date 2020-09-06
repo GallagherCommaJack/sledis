@@ -59,5 +59,5 @@ impl OwnedKey {
 
 #[quickcheck]
 fn encode_inj((k1, k2): (OwnedKey, OwnedKey)) -> bool {
-    (k1 == k2) == (k1.encode() == k2.encode())
+    (k1 != k2) || (k1.encode() == k2.encode())
 }

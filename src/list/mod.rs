@@ -9,8 +9,8 @@ impl Conn {
     pub fn list_get_meta(&self, name: &[u8]) -> Result<Meta, Error> {
         let key = keys::list_meta(name);
 
-        if let Some(bs) = self.items.get(&key)? {
-            Meta::decode(&bs).ok_or_else(|| InvalidMeta(name.to_vec()).into())
+        if let Some(bs) = self.get_record(&key)? {
+            Meta::decode(&bs)
         } else {
             Ok(Meta::default())
         }
@@ -29,7 +29,15 @@ impl Conn {
         let meta = self.list_get_meta(name)?;
 
         if let Some(ix) = meta.mk_key(ix) {
-            Ok(self.items.get(&keys::list(name, ix))?)
+            self.get_record(&keys::list(name, ix))?
+                .map(|rec| {
+                    if rec.tag() != Tag::List {
+                        Err(Error::BadType(Tag::List, rec.tag()))
+                    } else {
+                        Ok(rec.data())
+                    }
+                })
+                .transpose()
         } else {
             Ok(None)
         }
@@ -46,8 +54,8 @@ impl Conn {
         let item_key = IVec::from(keys::list(name, ix));
 
         let mut batch = sled::Batch::default();
-        batch.insert(&item_key, val);
-        batch.insert(&meta_key, &meta.encode());
+        batch.insert(&item_key, Record::FromData(Tag::List, val).into_raw());
+        batch.insert(&meta_key, meta.encode().into_raw());
         self.items.apply_batch(batch)?;
 
         Ok(())
@@ -64,8 +72,8 @@ impl Conn {
         let item_key = IVec::from(keys::list(name, ix));
 
         let mut batch = sled::Batch::default();
-        batch.insert(&item_key, val);
-        batch.insert(&meta_key, &meta.encode());
+        batch.insert(&item_key, Record::FromData(Tag::List, val).into_raw());
+        batch.insert(&meta_key, meta.encode().into_raw());
         self.items.apply_batch(batch)?;
 
         Ok(())
@@ -80,11 +88,25 @@ impl Conn {
         let mut meta = self.list_get_meta(name)?;
         if let Some(ix) = meta.pop_front() {
             let item_key = keys::list(name, ix);
-            let old = self.items.get(&item_key)?;
+            let old = self
+                .get_record(&keys::list(name, ix))?
+                .map(|rec| {
+                    if rec.tag() != Tag::List {
+                        Err(Error::BadType(Tag::List, rec.tag()))
+                    } else {
+                        Ok(rec.data())
+                    }
+                })
+                .transpose()?;
 
             let mut batch = sled::Batch::default();
-            batch.insert(&meta_key, &meta.encode());
             batch.remove(item_key);
+
+            if meta.len() > 0 {
+                batch.insert(&meta_key, &meta.encode().into_raw());
+            } else {
+                batch.remove(&meta_key)
+            }
 
             self.items.apply_batch(batch)?;
 
@@ -103,11 +125,26 @@ impl Conn {
         let mut meta = self.list_get_meta(name)?;
         if let Some(ix) = meta.pop_back() {
             let item_key = keys::list(name, ix);
-            let old = self.items.get(&item_key)?;
+            let old = self
+                .get_record(&keys::list(name, ix))?
+                .map(|rec| {
+                    if rec.tag() != Tag::List {
+                        Err(Error::BadType(Tag::List, rec.tag()))
+                    } else {
+                        Ok(rec.data())
+                    }
+                })
+                .transpose()?;
 
             let mut batch = sled::Batch::default();
-            batch.insert(&meta_key, &meta.encode());
+
             batch.remove(item_key);
+
+            if meta.len() > 0 {
+                batch.insert(&meta_key, &meta.encode().into_raw());
+            } else {
+                batch.remove(&meta_key)
+            }
 
             self.items.apply_batch(batch)?;
 
@@ -217,9 +254,7 @@ impl Conn {
 #[derive(Error, Debug)]
 pub enum ListError {
     #[error("invalid list metadata, key was: {0:#?}")]
-    InvalidMeta(Vec<u8>),
+    InvalidMeta(IVec),
     #[error("missing value in list {0:#?} at index {1}")]
     MissingVal(Vec<u8>, ListIndex),
 }
-
-use ListError::*;

@@ -82,6 +82,11 @@ impl<Inner: AsRef<[u8]>> Segment<Inner> {
         debug_assert!(self.start <= self.inner.as_ref().len());
         debug_assert!(self.end <= self.inner.as_ref().len());
     }
+
+    #[inline(always)]
+    pub fn into_inner(self) -> Inner {
+        self.inner
+    }
 }
 
 impl<Inner: AsRef<[u8]> + Clone> Segment<Inner> {
