@@ -8,7 +8,6 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/GallagherCommaJack/sledis"
 
 [dependencies]
-coz = { version = "0.1", optional = true }
 dashmap = "3.11.4"
 parking_lot = "0.10.2"
 sled = "0.34.0"
